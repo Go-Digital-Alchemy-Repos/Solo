@@ -7,6 +7,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import Avatar from '@/components/Avatar';
 import SoundCard from '@/components/SoundCard';
+import SoloHeader from '@/components/SoloHeader';
 import { useData } from '@/lib/data-context';
 
 export default function ProfileScreen() {
@@ -185,10 +186,8 @@ export default function ProfileScreen() {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: topInset }]}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profile</Text>
-      </View>
+    <View style={styles.container}>
+      <SoloHeader />
       <FlatList
         data={myPosts}
         keyExtractor={(item) => item.id}
@@ -214,19 +213,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.bg,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  headerTitle: {
-    color: Colors.accent,
-    fontSize: 24,
-    fontFamily: 'DMSans_700Bold',
   },
   profileSection: {
     alignItems: 'center',

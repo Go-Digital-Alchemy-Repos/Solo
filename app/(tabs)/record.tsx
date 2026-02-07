@@ -6,6 +6,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming, withSequence, Easing, withSpring } from 'react-native-reanimated';
 import Colors from '@/constants/colors';
+import SoloHeader from '@/components/SoloHeader';
 import { useData } from '@/lib/data-context';
 
 const MAX_DURATION_MS = 300000;
@@ -198,7 +199,8 @@ export default function RecordScreen() {
 
   if (permissionGranted === false) {
     return (
-      <View style={[styles.container, { paddingTop: topInset }]}>
+      <View style={styles.container}>
+        <SoloHeader />
         <View style={styles.permissionBox}>
           <Ionicons name="mic-off" size={48} color={Colors.accent} />
           <Text style={styles.permissionTitle}>Microphone Access Required</Text>
@@ -219,10 +221,8 @@ export default function RecordScreen() {
   const bars = Array.from({ length: 50 }, (_, i) => i);
 
   return (
-    <View style={[styles.container, { paddingTop: topInset }]}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Record</Text>
-      </View>
+    <View style={styles.container}>
+      <SoloHeader />
 
       {recordedUri && !isRecording ? (
         <View style={styles.reviewContainer}>
@@ -293,16 +293,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.bg,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  headerTitle: {
-    color: Colors.accent,
-    fontSize: 24,
-    fontFamily: 'DMSans_700Bold',
   },
   permissionBox: {
     flex: 1,

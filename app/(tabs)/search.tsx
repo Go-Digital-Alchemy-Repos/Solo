@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import Avatar from '@/components/Avatar';
 import SoundCard from '@/components/SoundCard';
+import SoloHeader from '@/components/SoloHeader';
 import { useData, type UserProfile, type AudioPost } from '@/lib/data-context';
 
 type SearchResult = { type: 'user'; data: UserProfile } | { type: 'post'; data: AudioPost };
@@ -60,7 +61,8 @@ export default function SearchScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: topInset + 8 }]}>
+      <SoloHeader />
+      <View style={styles.searchSection}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={18} color={Colors.textMuted} />
           <TextInput
@@ -94,6 +96,7 @@ export default function SearchScreen() {
           </View>
         )}
       </View>
+
 
       {query.length === 0 ? (
         <View style={styles.discoverSection}>
@@ -144,11 +147,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.bg,
   },
-  header: {
-    backgroundColor: 'rgba(0, 0, 0, 0.92)',
+  searchSection: {
     paddingHorizontal: 16,
     paddingBottom: 8,
-    zIndex: 10,
   },
   searchBar: {
     flexDirection: 'row',
