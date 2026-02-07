@@ -7,14 +7,19 @@ export const users = pgTable("users", {
   id: varchar("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  username: text("username").unique(),
+  avatarUrl: text("avatar_url"),
+  bio: text("bio").default(""),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const solos = pgTable("solos", {
   id: varchar("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
   username: text("username").notNull(),
   audioUrl: text("audio_url").notNull(),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
@@ -26,11 +31,12 @@ export const solos = pgTable("solos", {
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+  email: true,
+  passwordHash: true,
 });
 
 export const insertSoloSchema = createInsertSchema(solos).pick({
+  userId: true,
   username: true,
   audioUrl: true,
   tags: true,
