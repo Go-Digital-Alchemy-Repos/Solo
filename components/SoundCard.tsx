@@ -223,13 +223,14 @@ export default function SoundCard({ post }: SoundCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: 'rgba(17, 17, 17, 0.5)',
     borderRadius: 16,
     padding: 16,
     marginHorizontal: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.08)',
+    borderColor: '#333333',
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
@@ -243,11 +244,11 @@ const styles = StyleSheet.create({
   displayName: {
     color: Colors.text,
     fontSize: 15,
-    fontFamily: 'DMSans_600SemiBold',
+    fontFamily: 'DMSans_700Bold',
   },
   username: {
-    color: Colors.textDim,
-    fontSize: 13,
+    color: '#888888',
+    fontSize: 12,
     fontFamily: 'DMSans_400Regular',
   },
   timeAgo: {
@@ -277,9 +278,10 @@ const styles = StyleSheet.create({
   },
   title: {
     color: Colors.text,
-    fontSize: 17,
+    fontSize: 18,
     fontFamily: 'DMSans_700Bold',
     marginBottom: 8,
+    letterSpacing: -0.3,
   },
   rssBadge: {
     flexDirection: 'row',
