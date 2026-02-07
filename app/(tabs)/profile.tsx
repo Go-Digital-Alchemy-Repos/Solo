@@ -135,18 +135,25 @@ export default function ProfileScreen() {
     setIsEditing(true);
   }, [currentUser]);
 
-  const handleLogout = useCallback(() => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: async () => {
-          if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          await logout();
+  const handleLogout = useCallback(async () => {
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('Are you sure you want to sign out?');
+      if (confirmed) {
+        await logout();
+      }
+    } else {
+      Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            await logout();
+          },
         },
-      },
-    ]);
+      ]);
+    }
   }, [logout]);
 
   const ProfileHeader = () => (
@@ -229,7 +236,7 @@ export default function ProfileScreen() {
             <Feather name="edit-2" size={16} color={Colors.accent} />
             <Text style={styles.editBtnText}>Edit Profile</Text>
           </Pressable>
-          <Pressable onPress={handleLogout} style={styles.logoutBtn}>
+          <Pressable onPress={handleLogout} style={styles.logoutBtn} testID="logout-btn">
             <Ionicons name="log-out-outline" size={18} color={Colors.danger} />
           </Pressable>
         </View>
