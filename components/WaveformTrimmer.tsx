@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { StyleSheet, View, Text, Pressable, Platform, PanResponder, LayoutChangeEvent, TextInput } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -56,6 +57,10 @@ function getWordsNearPosition(words: TranscriptWord[], positionSec: number, wind
 }
 
 export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost, isPosting, transcript, segmentMarkers }: WaveformTrimmerProps) {
+  const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === 'web' ? 67 : insets.top;
+  const bottomInset = Platform.OS === 'web' ? 34 : Math.max(insets.bottom, 20);
+
   const [containerWidth, setContainerWidth] = useState(0);
   const trackWidth = containerWidth - HANDLE_WIDTH * 2;
 
@@ -70,6 +75,11 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
   const lastHapticRef = useRef(0);
   const startFracOnGrant = useRef(0);
   const endFracOnGrant = useRef(1);
+  const trimStartFracRef = useRef(0);
+  const trimEndFracRef = useRef(1);
+
+  useEffect(() => { trimStartFracRef.current = trimStartFrac; }, [trimStartFrac]);
+  useEffect(() => { trimEndFracRef.current = trimEndFrac; }, [trimEndFrac]);
 
   const waveformData = useMemo(() => generateWaveformData(BAR_COUNT, audioUri.length), [audioUri]);
 
@@ -90,7 +100,7 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
     }
   }, []);
 
-  const stopPreview = useCallback(async () => {
+  const cleanupPlayback = useCallback(async () => {
     if (playbackIntervalRef.current) {
       clearInterval(playbackIntervalRef.current);
       playbackIntervalRef.current = null;
@@ -105,55 +115,56 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
     setIsPlaying(false);
   }, []);
 
-  const ensureSoundLoaded = useCallback(async (): Promise<Audio.Sound> => {
-    if (soundRef.current) {
+  const startPlaybackInterval = useCallback(() => {
+    if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
+    playbackIntervalRef.current = setInterval(async () => {
+      if (!soundRef.current) return;
       try {
         const status = await soundRef.current.getStatusAsync();
-        if (status.isLoaded) return soundRef.current;
+        if (status.isLoaded) {
+          const pos = status.positionMillis;
+          setPlaybackPos(pos);
+          const endMs = trimEndFracRef.current * durationMs;
+          if (pos >= endMs || !status.isPlaying) {
+            const startMs = trimStartFracRef.current * durationMs;
+            await soundRef.current.setPositionAsync(Math.round(startMs));
+            await soundRef.current.playAsync();
+          }
+        }
       } catch {}
-      try {
-        await soundRef.current.unloadAsync();
-      } catch {}
-    }
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: audioUri },
-      { shouldPlay: false }
-    );
-    soundRef.current = sound;
-    return sound;
-  }, [audioUri]);
+    }, 80);
+  }, [durationMs]);
 
   const seekToPosition = useCallback(async (posMs: number) => {
     try {
-      const sound = await ensureSoundLoaded();
-      await sound.setPositionAsync(Math.round(posMs));
-      setPlaybackPos(posMs);
-      if (!isPlaying) {
-        await sound.playAsync();
+      if (!soundRef.current) {
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: audioUri },
+          { positionMillis: Math.round(posMs), shouldPlay: true }
+        );
+        soundRef.current = sound;
         setIsPlaying(true);
-        if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
-        playbackIntervalRef.current = setInterval(async () => {
-          if (!soundRef.current) return;
-          try {
-            const status = await soundRef.current.getStatusAsync();
-            if (status.isLoaded) {
-              const pos = status.positionMillis;
-              setPlaybackPos(pos);
-              if (pos >= trimEndFrac * durationMs || !status.isPlaying) {
-                await soundRef.current.setPositionAsync(Math.round(trimStartFrac * durationMs));
-                await soundRef.current.playAsync();
-              }
-            }
-          } catch {}
-        }, 80);
+        startPlaybackInterval();
+      } else {
+        await soundRef.current.setPositionAsync(Math.round(posMs));
+        const status = await soundRef.current.getStatusAsync();
+        if (status.isLoaded && !status.isPlaying) {
+          await soundRef.current.playAsync();
+          setIsPlaying(true);
+          startPlaybackInterval();
+        }
       }
+      setPlaybackPos(posMs);
     } catch (e) {
       console.error('Seek failed:', e);
     }
-  }, [ensureSoundLoaded, isPlaying, trimStartFrac, trimEndFrac, durationMs]);
+  }, [audioUri, startPlaybackInterval]);
 
-  const startPreview = useCallback(async () => {
-    await stopPreview();
+  const togglePlayPause = useCallback(async () => {
+    if (isPlaying) {
+      await cleanupPlayback();
+      return;
+    }
     try {
       const { sound } = await Audio.Sound.createAsync(
         { uri: audioUri },
@@ -161,26 +172,12 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
       );
       soundRef.current = sound;
       setIsPlaying(true);
-
-      playbackIntervalRef.current = setInterval(async () => {
-        if (!soundRef.current) return;
-        try {
-          const status = await soundRef.current.getStatusAsync();
-          if (status.isLoaded) {
-            const pos = status.positionMillis;
-            setPlaybackPos(pos);
-            if (pos >= trimEndMs || !status.isPlaying) {
-              await soundRef.current.setPositionAsync(Math.round(trimStartMs));
-              await soundRef.current.playAsync();
-            }
-          }
-        } catch {}
-      }, 80);
+      startPlaybackInterval();
     } catch (e) {
       console.error('Preview playback failed:', e);
       setIsPlaying(false);
     }
-  }, [audioUri, trimStartMs, trimEndMs, stopPreview]);
+  }, [isPlaying, audioUri, trimStartMs, cleanupPlayback, startPlaybackInterval]);
 
   useEffect(() => {
     return () => {
@@ -246,19 +243,17 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
     if (trackWidth <= 0) return null;
     return PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 3,
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 2,
       onPanResponderGrant: (evt) => {
-        const touchX = evt.nativeEvent.locationX - HANDLE_WIDTH;
-        const frac = Math.max(0, Math.min(1, touchX / trackWidth));
-        const posMs = frac * durationMs;
-        seekToPosition(posMs);
+        const touchX = evt.nativeEvent.locationX;
+        const frac = Math.max(trimStartFracRef.current, Math.min(trimEndFracRef.current, touchX / (trackWidth + HANDLE_WIDTH * 2)));
+        seekToPosition(frac * durationMs);
         triggerHaptic();
       },
       onPanResponderMove: (evt) => {
-        const touchX = evt.nativeEvent.locationX - HANDLE_WIDTH;
-        const frac = Math.max(0, Math.min(1, touchX / trackWidth));
-        const posMs = frac * durationMs;
-        seekToPosition(posMs);
+        const touchX = evt.nativeEvent.locationX;
+        const frac = Math.max(trimStartFracRef.current, Math.min(trimEndFracRef.current, touchX / (trackWidth + HANDLE_WIDTH * 2)));
+        seekToPosition(frac * durationMs);
       },
       onPanResponderRelease: () => {},
     });
@@ -278,14 +273,19 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
 
   const handlePost = useCallback(() => {
     if (!canPost) return;
-    stopPreview();
+    cleanupPlayback();
     onPost(title.trim(), trimStartMs, trimEndMs);
-  }, [canPost, stopPreview, onPost, title, trimStartMs, trimEndMs]);
+  }, [canPost, cleanupPlayback, onPost, title, trimStartMs, trimEndMs]);
+
+  const handleCancel = useCallback(() => {
+    cleanupPlayback();
+    onCancel();
+  }, [cleanupPlayback, onCancel]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: topInset }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => { stopPreview(); onCancel(); }} style={styles.cancelBtn} hitSlop={12}>
+        <Pressable onPress={handleCancel} style={styles.cancelBtn} hitSlop={16}>
           <Text style={styles.cancelText}>Cancel</Text>
         </Pressable>
         <Text style={styles.headerTitle}>Edit</Text>
@@ -293,7 +293,7 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
           onPress={handlePost}
           style={[styles.postBtn, !canPost && styles.postBtnDisabled]}
           disabled={!canPost}
-          hitSlop={12}
+          hitSlop={16}
         >
           <Text style={[styles.postBtnText, !canPost && styles.postBtnTextDisabled]}>Post</Text>
         </Pressable>
@@ -317,7 +317,7 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
 
       {isPlaying && transcriptBubbleText.length > 0 && containerWidth > 0 && (
         <View style={[styles.transcriptBubble, {
-          left: Math.max(20, Math.min(containerWidth - 180, bubbleLeftPx - 80)),
+          left: Math.max(36, Math.min(containerWidth - 144, bubbleLeftPx - 64)),
         }]}>
           <Text style={styles.transcriptBubbleText} numberOfLines={2}>
             {transcriptBubbleText}
@@ -356,7 +356,7 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
               }]} />
 
               <View
-                style={styles.waveformContainer}
+                style={styles.waveformTouchArea}
                 {...(scrubResponder?.panHandlers || {})}
               >
                 {waveformData.map((amp, i) => {
@@ -396,12 +396,12 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
         <Text style={styles.scrubHint}>Drag across waveform to scrub</Text>
       </View>
 
-      <View style={styles.controls}>
+      <View style={[styles.controls, { paddingBottom: bottomInset + 8 }]}>
         <Pressable
-          onPress={isPlaying ? stopPreview : startPreview}
+          onPress={togglePlayPause}
           style={styles.playPauseBtn}
         >
-          <Ionicons name={isPlaying ? "pause" : "play"} size={28} color={Colors.bg} />
+          <Ionicons name={isPlaying ? "pause" : "play"} size={30} color={Colors.bg} />
         </Pressable>
       </View>
     </View>
@@ -418,18 +418,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
   cancelBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   cancelText: {
     color: Colors.textDim,
-    fontSize: 16,
-    fontFamily: 'DMSans_500Medium',
+    fontSize: 15,
+    fontFamily: 'DMSans_600SemiBold',
   },
   headerTitle: {
     color: Colors.text,
@@ -438,12 +440,12 @@ const styles = StyleSheet.create({
   },
   postBtn: {
     backgroundColor: Colors.accent,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 24,
   },
   postBtnDisabled: {
-    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
   },
   postBtnText: {
     color: Colors.bg,
@@ -451,13 +453,13 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans_700Bold',
   },
   postBtnTextDisabled: {
-    color: 'rgba(0, 0, 0, 0.4)',
+    color: 'rgba(0, 0, 0, 0.3)',
   },
   titleInput: {
     backgroundColor: Colors.surface,
     marginHorizontal: 16,
     marginTop: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
     color: Colors.text,
@@ -487,7 +489,7 @@ const styles = StyleSheet.create({
   },
   transcriptBubble: {
     position: 'absolute',
-    top: 155,
+    top: 175,
     width: 160,
     backgroundColor: 'rgba(30, 30, 30, 0.95)',
     borderRadius: 10,
@@ -510,22 +512,23 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   trimmerContainer: {
-    height: 130,
+    height: 140,
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: 'hidden',
     position: 'relative',
   },
-  waveformContainer: {
+  waveformTouchArea: {
     position: 'absolute',
-    left: HANDLE_WIDTH,
-    right: HANDLE_WIDTH,
+    left: 0,
+    right: 0,
     top: 0,
     bottom: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: BAR_GAP,
-    paddingHorizontal: 4,
+    paddingHorizontal: HANDLE_WIDTH + 4,
+    zIndex: 3,
   },
   bar: {
     flex: 1,
@@ -551,12 +554,12 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   handleLeft: {
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
+    borderTopLeftRadius: 18,
+    borderBottomLeftRadius: 18,
   },
   handleRight: {
-    borderTopRightRadius: 16,
-    borderBottomRightRadius: 16,
+    borderTopRightRadius: 18,
+    borderBottomRightRadius: 18,
   },
   handleGrip: {
     width: 3,
@@ -590,12 +593,11 @@ const styles = StyleSheet.create({
   controls: {
     alignItems: 'center',
     marginTop: 'auto',
-    paddingBottom: 24,
   },
   playPauseBtn: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: Colors.accent,
     alignItems: 'center',
     justifyContent: 'center',

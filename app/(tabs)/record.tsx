@@ -361,7 +361,7 @@ export default function RecordScreen() {
     <View style={styles.container}>
       <SoloHeader />
 
-      <View style={styles.recordContainer}>
+      <View style={[styles.recordContainer, { paddingBottom: Platform.OS === 'web' ? 84 : Math.max(insets.bottom, 20) + 60 }]}>
         <View style={styles.toolsRow}>
           <Teleprompter
             isRecording={phase === 'recording'}

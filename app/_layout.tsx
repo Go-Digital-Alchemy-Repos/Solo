@@ -4,6 +4,7 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useFonts, DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold } from "@expo-google-fonts/dm-sans";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -78,20 +79,22 @@ export default function RootLayout() {
 
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
-          <KeyboardProvider>
-            <AuthProvider>
-              <DataProvider>
-                <PlaybackProvider>
-                  <StatusBar style="light" />
-                  <RootLayoutNav />
-                </PlaybackProvider>
-              </DataProvider>
-            </AuthProvider>
-          </KeyboardProvider>
-        </GestureHandlerRootView>
-      </QueryClientProvider>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
+            <KeyboardProvider>
+              <AuthProvider>
+                <DataProvider>
+                  <PlaybackProvider>
+                    <StatusBar style="light" />
+                    <RootLayoutNav />
+                  </PlaybackProvider>
+                </DataProvider>
+              </AuthProvider>
+            </KeyboardProvider>
+          </GestureHandlerRootView>
+        </QueryClientProvider>
+      </SafeAreaProvider>
     </ErrorBoundary>
   );
 }
