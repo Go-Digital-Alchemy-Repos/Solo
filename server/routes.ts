@@ -23,6 +23,7 @@ declare module "express-session" {
 
 const UPLOADS_DIR = path.resolve(process.cwd(), "uploads", "solos");
 const AVATARS_DIR = path.resolve(process.cwd(), "uploads", "avatars");
+const VIBES_DIR = path.resolve(process.cwd(), "uploads", "vibes");
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
@@ -39,6 +40,47 @@ async function requireAuth(req: Request, res: Response): Promise<string | null> 
     return null;
   }
   return userId;
+}
+
+const AVAILABLE_VIBES = [
+  { id: "coffee-shop", label: "Coffee Shop", file: "coffee-shop.mp3" },
+  { id: "nature", label: "Nature", file: "nature.mp3" },
+  { id: "lofi-beat", label: "Lofi Beat", file: "lofi-beat.mp3" },
+];
+
+async function mixVibeIntoAudio(audioBuffer: Buffer, vibeId: string): Promise<Buffer> {
+  const vibe = AVAILABLE_VIBES.find(v => v.id === vibeId);
+  if (!vibe) return audioBuffer;
+
+  const vibePath = path.join(VIBES_DIR, vibe.file);
+  if (!fs.existsSync(vibePath)) return audioBuffer;
+
+  const inputPath = path.join(tmpdir(), `mix-in-${randomUUID()}.m4a`);
+  const outputPath = path.join(tmpdir(), `mix-out-${randomUUID()}.m4a`);
+  try {
+    await writeFile(inputPath, audioBuffer);
+    await new Promise<void>((resolve, reject) => {
+      const ffmpeg = spawn("ffmpeg", [
+        "-i", inputPath,
+        "-i", vibePath,
+        "-filter_complex", "[1:a]volume=0.10[bg];[0:a][bg]amix=inputs=2:duration=first:dropout_transition=2",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-y",
+        outputPath,
+      ]);
+      ffmpeg.stderr.on("data", () => {});
+      ffmpeg.on("close", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`ffmpeg mix exited with code ${code}`));
+      });
+      ffmpeg.on("error", reject);
+    });
+    return await readFile(outputPath);
+  } finally {
+    await unlink(inputPath).catch(() => {});
+    await unlink(outputPath).catch(() => {});
+  }
 }
 
 async function trimAudio(audioBuffer: Buffer, trimStartSec: number, trimEndSec: number): Promise<Buffer> {
@@ -247,6 +289,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     stream.pipe(res);
   });
 
+  app.get("/api/vibes", (_req, res) => {
+    return res.json(AVAILABLE_VIBES.map(v => ({ id: v.id, label: v.label })));
+  });
+
+  app.get("/api/vibes/:vibeId/audio", (req, res) => {
+    const vibe = AVAILABLE_VIBES.find(v => v.id === req.params.vibeId);
+    if (!vibe) return res.status(404).json({ error: "Vibe not found" });
+
+    const filePath = path.join(VIBES_DIR, vibe.file);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Vibe file not found" });
+
+    const stat = fs.statSync(filePath);
+    res.set("Content-Type", "audio/mpeg");
+    res.set("Content-Length", stat.size.toString());
+    res.set("Accept-Ranges", "bytes");
+    res.set("Cache-Control", "public, max-age=31536000");
+    fs.createReadStream(filePath).pipe(res);
+  });
+
   app.post("/api/solos", upload.single("audio"), async (req, res) => {
     const userId = await requireAuth(req, res);
     if (!userId) return;
@@ -272,6 +333,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trimEnd = trimEndMs ? parseFloat(trimEndMs) / 1000 : null;
       if (trimStart !== null && trimEnd !== null && trimEnd > trimStart) {
         audioData = await trimAudio(Buffer.from(audioData), trimStart, trimEnd);
+      }
+
+      const { vibeId } = req.body;
+      if (vibeId && typeof vibeId === "string") {
+        audioData = await mixVibeIntoAudio(Buffer.from(audioData), vibeId);
       }
 
       const fileId = randomUUID();

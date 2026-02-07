@@ -67,6 +67,7 @@ interface DataContextValue {
     tags?: string[];
     trimStartMs?: number;
     trimEndMs?: number;
+    vibeId?: string;
   }) => Promise<void>;
   toggleLike: (postId: string) => void;
   addComment: (postId: string, text: string) => void;
@@ -209,6 +210,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     tags?: string[];
     trimStartMs?: number;
     trimEndMs?: number;
+    vibeId?: string;
   }) => {
     setIsUploading(true);
     try {
@@ -233,6 +235,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (params.trimStartMs !== undefined && params.trimEndMs !== undefined) {
         formData.append('trimStartMs', params.trimStartMs.toString());
         formData.append('trimEndMs', params.trimEndMs.toString());
+      }
+      if (params.vibeId) {
+        formData.append('vibeId', params.vibeId);
       }
 
       const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;

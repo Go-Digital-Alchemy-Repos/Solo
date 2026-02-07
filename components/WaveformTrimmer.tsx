@@ -1,10 +1,10 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { StyleSheet, View, Text, Pressable, Platform, PanResponder, Dimensions, LayoutChangeEvent } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Platform, PanResponder, LayoutChangeEvent } from 'react-native';
 import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming, runOnJS } from 'react-native-reanimated';
 import Colors from '@/constants/colors';
+import type { TranscriptWord } from '@/lib/data-context';
 
 const HANDLE_WIDTH = 20;
 const BAR_COUNT = 80;
@@ -16,6 +16,8 @@ interface WaveformTrimmerProps {
   durationMs: number;
   onConfirm: (trimStartMs: number, trimEndMs: number) => void;
   onDiscard: () => void;
+  transcript?: { text: string; words: TranscriptWord[] } | null;
+  segmentMarkers?: number[];
 }
 
 function generateWaveformData(count: number, seed: number): number[] {
@@ -37,7 +39,22 @@ function formatTime(ms: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function WaveformTrimmer({ audioUri, durationMs, onConfirm, onDiscard }: WaveformTrimmerProps) {
+function getWordsNearPosition(words: TranscriptWord[], positionSec: number, windowSec: number = 1.5): string {
+  if (!words || words.length === 0) return '';
+  const nearby = words.filter(w => w.start >= positionSec - windowSec && w.start <= positionSec + windowSec);
+  if (nearby.length === 0) {
+    const closest = words.reduce((prev, curr) =>
+      Math.abs(curr.start - positionSec) < Math.abs(prev.start - positionSec) ? curr : prev
+    );
+    const idx = words.indexOf(closest);
+    const start = Math.max(0, idx - 2);
+    const end = Math.min(words.length, idx + 3);
+    return words.slice(start, end).map(w => w.word).join(' ');
+  }
+  return nearby.map(w => w.word).join(' ');
+}
+
+export default function WaveformTrimmer({ audioUri, durationMs, onConfirm, onDiscard, transcript, segmentMarkers }: WaveformTrimmerProps) {
   const [containerWidth, setContainerWidth] = useState(0);
   const trackWidth = containerWidth - HANDLE_WIDTH * 2;
 
@@ -111,7 +128,7 @@ export default function WaveformTrimmer({ audioUri, durationMs, onConfirm, onDis
             }
           }
         } catch {}
-      }, 100);
+      }, 80);
     } catch (e) {
       console.error('Preview playback failed:', e);
       setIsPlaying(false);
@@ -175,17 +192,39 @@ export default function WaveformTrimmer({ audioUri, durationMs, onConfirm, onDis
   }, [trackWidth, trimStartFrac, trimEndFrac, durationMs, triggerHaptic]);
 
   const playbackFrac = durationMs > 0 ? playbackPos / durationMs : 0;
+  const playbackSec = playbackPos / 1000;
+
+  const transcriptBubbleText = useMemo(() => {
+    if (!transcript?.words || transcript.words.length === 0) return '';
+    if (!isPlaying) return '';
+    return getWordsNearPosition(transcript.words, playbackSec);
+  }, [transcript, playbackSec, isPlaying]);
+
+  const bubbleLeftPx = HANDLE_WIDTH + playbackFrac * trackWidth;
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>Trim Your Recording</Text>
-      <Text style={styles.subheading}>Drag the yellow handles to select the part you want to keep</Text>
+      <Text style={styles.heading}>Edit & Preview</Text>
+      <Text style={styles.subheading}>Drag handles to trim, tap play to preview</Text>
 
       <View style={styles.timeRow}>
         <Text style={styles.timeLabel}>{formatTime(trimStartMs)}</Text>
         <Text style={styles.selectionLabel}>Selected: {formatTime(selectionMs)}</Text>
         <Text style={styles.timeLabel}>{formatTime(trimEndMs)}</Text>
       </View>
+
+      {isPlaying && transcriptBubbleText.length > 0 && (
+        <View style={[styles.transcriptBubble, {
+          left: Math.max(20, Math.min(containerWidth - 180, bubbleLeftPx - 80)),
+        }]}>
+          <Text style={styles.transcriptBubbleText} numberOfLines={2}>
+            {transcriptBubbleText}
+          </Text>
+          <View style={[styles.bubbleArrow, {
+            left: Math.max(10, Math.min(140, bubbleLeftPx - Math.max(20, Math.min(containerWidth - 180, bubbleLeftPx - 80)) + 0)),
+          }]} />
+        </View>
+      )}
 
       <View style={styles.trimmerContainer} onLayout={onLayout}>
         {containerWidth > 0 && (
@@ -221,6 +260,9 @@ export default function WaveformTrimmer({ audioUri, durationMs, onConfirm, onDis
                 const barFrac = i / BAR_COUNT;
                 const isInSelection = barFrac >= trimStartFrac && barFrac <= trimEndFrac;
                 const isAtPlayback = isPlaying && Math.abs(barFrac - playbackFrac) < (1.5 / BAR_COUNT);
+                const isSegmentBoundary = segmentMarkers && segmentMarkers.some(
+                  marker => Math.abs(barFrac - marker / durationMs) < (1.2 / BAR_COUNT)
+                );
                 return (
                   <View
                     key={i}
@@ -228,11 +270,13 @@ export default function WaveformTrimmer({ audioUri, durationMs, onConfirm, onDis
                       styles.bar,
                       {
                         height: 8 + amp * 72,
-                        backgroundColor: isAtPlayback
-                          ? '#FFFFFF'
-                          : isInSelection
-                            ? Colors.accent
-                            : 'rgba(255, 215, 0, 0.2)',
+                        backgroundColor: isSegmentBoundary
+                          ? 'rgba(255, 68, 68, 0.6)'
+                          : isAtPlayback
+                            ? '#FFFFFF'
+                            : isInSelection
+                              ? Colors.accent
+                              : 'rgba(255, 215, 0, 0.2)',
                       },
                     ]}
                   />
@@ -281,7 +325,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
-    gap: 16,
+    gap: 12,
   },
   heading: {
     color: Colors.text,
@@ -313,6 +357,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'DMSans_600SemiBold',
     fontVariant: ['tabular-nums'],
+  },
+  transcriptBubble: {
+    position: 'absolute',
+    top: 110,
+    width: 160,
+    backgroundColor: 'rgba(30, 30, 30, 0.95)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    zIndex: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.25)',
+  },
+  transcriptBubbleText: {
+    color: Colors.text,
+    fontSize: 12,
+    fontFamily: 'DMSans_500Medium',
+    lineHeight: 17,
+    textAlign: 'center',
+  },
+  bubbleArrow: {
+    position: 'absolute',
+    bottom: -5,
+    width: 10,
+    height: 10,
+    backgroundColor: 'rgba(30, 30, 30, 0.95)',
+    transform: [{ rotate: '45deg' }],
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.25)',
   },
   trimmerContainer: {
     height: 120,
@@ -388,12 +462,12 @@ const styles = StyleSheet.create({
   },
   controls: {
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 4,
   },
   playBtn: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: Colors.accent,
     alignItems: 'center',
     justifyContent: 'center',

@@ -1,17 +1,21 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { StyleSheet, View, Text, Pressable, Platform, TextInput, Alert } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Platform, TextInput, Alert, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
-import { Ionicons, Feather } from '@expo/vector-icons';
+import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming, withSequence, Easing, withSpring } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming, withSequence, Easing } from 'react-native-reanimated';
 import Colors from '@/constants/colors';
 import SoloHeader from '@/components/SoloHeader';
 import WaveformTrimmer from '@/components/WaveformTrimmer';
+import Teleprompter from '@/components/Teleprompter';
+import VibeSelector from '@/components/VibeSelector';
 import { useData } from '@/lib/data-context';
 
 const MAX_DURATION_MS = 300000;
 const MIN_DURATION_MS = 15000;
+
+type RecordPhase = 'idle' | 'recording' | 'paused' | 'editing' | 'review';
 
 function LiveBar({ index, isRecording }: { index: number; isRecording: boolean }) {
   const height = useSharedValue(8);
@@ -55,16 +59,31 @@ function LiveBar({ index, isRecording }: { index: number; isRecording: boolean }
   );
 }
 
+function SegmentDivider() {
+  return (
+    <View style={{
+      width: 2,
+      height: 40,
+      backgroundColor: Colors.danger,
+      borderRadius: 1,
+      opacity: 0.7,
+      marginHorizontal: 1,
+    }} />
+  );
+}
+
 export default function RecordScreen() {
   const insets = useSafeAreaInsets();
   const { currentUser, uploadAndPost, isUploading } = useData();
-  const [isRecording, setIsRecording] = useState(false);
+  const [phase, setPhase] = useState<RecordPhase>('idle');
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
   const [trimData, setTrimData] = useState<{ startMs: number; endMs: number } | null>(null);
   const [title, setTitle] = useState('');
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
+  const [selectedVibe, setSelectedVibe] = useState<string | null>(null);
+  const [segmentCount, setSegmentCount] = useState(1);
+  const [segmentMarkers, setSegmentMarkers] = useState<number[]>([]);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
@@ -79,7 +98,7 @@ export default function RecordScreen() {
   }, []);
 
   useEffect(() => {
-    if (isRecording) {
+    if (phase === 'recording') {
       pulseScale.value = withRepeat(
         withSequence(
           withTiming(1.5, { duration: 800, easing: Easing.out(Easing.ease) }),
@@ -98,7 +117,7 @@ export default function RecordScreen() {
       pulseScale.value = withTiming(1, { duration: 200 });
       pulseOpacity.value = withTiming(0.3, { duration: 200 });
     }
-  }, [isRecording]);
+  }, [phase]);
 
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseScale.value }],
@@ -119,9 +138,11 @@ export default function RecordScreen() {
       await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       await recording.startAsync();
       recordingRef.current = recording;
-      setIsRecording(true);
+      setPhase('recording');
       setRecordingDuration(0);
       setRecordedUri(null);
+      setSegmentCount(1);
+      setSegmentMarkers([]);
 
       intervalRef.current = setInterval(() => {
         setRecordingDuration(prev => {
@@ -134,6 +155,45 @@ export default function RecordScreen() {
       }, 1000);
     } catch (e) {
       console.error('Failed to start recording:', e);
+    }
+  }, []);
+
+  const pauseRecording = useCallback(async () => {
+    if (!recordingRef.current) return;
+    try {
+      if (Platform.OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      await recordingRef.current.pauseAsync();
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      setSegmentMarkers(prev => [...prev, recordingDuration]);
+      setPhase('paused');
+    } catch (e) {
+      console.error('Failed to pause recording:', e);
+    }
+  }, [recordingDuration]);
+
+  const resumeRecording = useCallback(async () => {
+    if (!recordingRef.current) return;
+    try {
+      if (Platform.OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      await recordingRef.current.startAsync();
+      setSegmentCount(prev => prev + 1);
+      setPhase('recording');
+
+      intervalRef.current = setInterval(() => {
+        setRecordingDuration(prev => {
+          const next = prev + 1000;
+          if (next >= MAX_DURATION_MS) {
+            stopRecording();
+          }
+          return next;
+        });
+      }, 1000);
+    } catch (e) {
+      console.error('Failed to resume recording:', e);
     }
   }, []);
 
@@ -150,27 +210,46 @@ export default function RecordScreen() {
       });
       const uri = recordingRef.current.getURI();
       setRecordedUri(uri);
-      setIsRecording(false);
-      setIsEditing(true);
+      setPhase('editing');
       setTrimData(null);
       recordingRef.current = null;
     } catch (e) {
       console.error('Failed to stop recording:', e);
-      setIsRecording(false);
+      setPhase('idle');
     }
+  }, []);
+
+  const redoRecording = useCallback(() => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    if (recordingRef.current) {
+      recordingRef.current.stopAndUnloadAsync().catch(() => {});
+      recordingRef.current = null;
+    }
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setRecordedUri(null);
+    setRecordingDuration(0);
+    setPhase('idle');
+    setTrimData(null);
+    setTitle('');
+    setSegmentCount(1);
+    setSegmentMarkers([]);
   }, []);
 
   const discardRecording = useCallback(() => {
     setRecordedUri(null);
     setRecordingDuration(0);
-    setIsEditing(false);
+    setPhase('idle');
     setTrimData(null);
     setTitle('');
+    setSegmentCount(1);
+    setSegmentMarkers([]);
   }, []);
 
   const handleTrimConfirm = useCallback((startMs: number, endMs: number) => {
     setTrimData({ startMs, endMs });
-    setIsEditing(false);
+    setPhase('review');
   }, []);
 
   const handleTrimDiscard = useCallback(() => {
@@ -195,12 +274,16 @@ export default function RecordScreen() {
         durationMs: effectiveDurationMs,
         trimStartMs: trimData?.startMs,
         trimEndMs: trimData?.endMs,
+        vibeId: selectedVibe || undefined,
       });
       setRecordedUri(null);
       setRecordingDuration(0);
-      setIsEditing(false);
+      setPhase('idle');
       setTrimData(null);
       setTitle('');
+      setSelectedVibe(null);
+      setSegmentCount(1);
+      setSegmentMarkers([]);
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
@@ -209,7 +292,7 @@ export default function RecordScreen() {
       console.error('Failed to upload:', e);
       Alert.alert('Upload Failed', 'Could not upload your recording. Please try again.');
     }
-  }, [recordedUri, title, effectiveDurationMs, trimData, uploadAndPost]);
+  }, [recordedUri, title, effectiveDurationMs, trimData, selectedVibe, uploadAndPost]);
 
   const formatDuration = (ms: number) => {
     const totalSec = Math.floor(ms / 1000);
@@ -240,24 +323,32 @@ export default function RecordScreen() {
   }
 
   const bars = Array.from({ length: 50 }, (_, i) => i);
+  const isActiveRecording = phase === 'recording' || phase === 'paused';
 
   return (
     <View style={styles.container}>
       <SoloHeader />
 
-      {recordedUri && isEditing ? (
+      {phase === 'editing' && recordedUri ? (
         <WaveformTrimmer
           audioUri={recordedUri}
           durationMs={recordingDuration}
           onConfirm={handleTrimConfirm}
           onDiscard={handleTrimDiscard}
+          segmentMarkers={segmentMarkers}
         />
-      ) : recordedUri && !isRecording ? (
+      ) : phase === 'review' && recordedUri ? (
         <View style={styles.reviewContainer}>
           <View style={styles.reviewCard}>
             <Ionicons name="checkmark-circle" size={48} color={Colors.accent} />
             <Text style={styles.reviewDuration}>{formatDuration(effectiveDurationMs)}</Text>
-            <Text style={styles.reviewLabel}>{trimData ? 'trimmed' : 'recorded'}</Text>
+            <Text style={styles.reviewLabel}>
+              {trimData ? 'trimmed' : 'recorded'}
+              {selectedVibe ? ` + ${selectedVibe.replace('-', ' ')}` : ''}
+            </Text>
+            {segmentCount > 1 && (
+              <Text style={styles.segmentBadge}>{segmentCount} segments</Text>
+            )}
           </View>
           <TextInput
             style={styles.titleInput}
@@ -280,37 +371,80 @@ export default function RecordScreen() {
         </View>
       ) : (
         <View style={styles.recordContainer}>
-          <View style={styles.waveformLive}>
-            {bars.map(i => (
-              <LiveBar key={i} index={i} isRecording={isRecording} />
-            ))}
+          <View style={styles.toolsRow}>
+            <Teleprompter
+              isRecording={phase === 'recording'}
+              isPaused={phase === 'paused'}
+            />
+            <VibeSelector
+              selectedVibe={selectedVibe}
+              onSelect={setSelectedVibe}
+              isRecording={isActiveRecording}
+            />
           </View>
 
-          <Text style={styles.timer}>{formatDuration(recordingDuration)}</Text>
-          <Text style={styles.timerLabel}>
-            {isRecording ? 'Recording...' : 'Tap to start'}
-          </Text>
+          <View style={styles.centerArea}>
+            {isActiveRecording && segmentCount > 1 && (
+              <View style={styles.segmentIndicator}>
+                <MaterialCommunityIcons name="layers-outline" size={14} color={Colors.accent} />
+                <Text style={styles.segmentText}>Segment {segmentCount}</Text>
+              </View>
+            )}
 
-          <View style={styles.recBtnContainer}>
-            <Animated.View style={[styles.recPulse, pulseStyle]} />
-            <Pressable
-              onPress={isRecording ? stopRecording : startRecording}
-              style={[styles.recBtn, isRecording && styles.recBtnActive]}
-            >
-              {isRecording ? (
-                <View style={styles.stopIcon} />
-              ) : (
-                <Ionicons name="mic" size={32} color={Colors.bg} />
+            <View style={styles.waveformLive}>
+              {segmentMarkers.length > 0 && phase === 'paused' && (
+                <SegmentDivider />
               )}
-            </Pressable>
-          </View>
+              {bars.map(i => (
+                <LiveBar key={i} index={i} isRecording={phase === 'recording'} />
+              ))}
+            </View>
 
-          <Text style={styles.durationHint}>
-            {isRecording
-              ? `Max ${formatDuration(MAX_DURATION_MS)}`
-              : `Min 15s / Max 5min`
-            }
-          </Text>
+            <Text style={styles.timer}>{formatDuration(recordingDuration)}</Text>
+            <Text style={styles.timerLabel}>
+              {phase === 'recording' ? 'Recording...' : phase === 'paused' ? 'Paused' : 'Tap to start'}
+            </Text>
+
+            <View style={styles.controlsRow}>
+              {isActiveRecording && (
+                <Pressable onPress={redoRecording} style={styles.secondaryBtn}>
+                  <Ionicons name="refresh" size={24} color={Colors.danger} />
+                </Pressable>
+              )}
+
+              <View style={styles.recBtnContainer}>
+                <Animated.View style={[styles.recPulse, pulseStyle]} />
+                {phase === 'idle' ? (
+                  <Pressable onPress={startRecording} style={styles.recBtn}>
+                    <Ionicons name="mic" size={32} color={Colors.bg} />
+                  </Pressable>
+                ) : phase === 'recording' ? (
+                  <Pressable onPress={pauseRecording} style={[styles.recBtn, styles.recBtnActive]}>
+                    <Ionicons name="pause" size={28} color={Colors.bg} />
+                  </Pressable>
+                ) : (
+                  <Pressable onPress={resumeRecording} style={styles.recBtn}>
+                    <Ionicons name="mic" size={28} color={Colors.bg} />
+                  </Pressable>
+                )}
+              </View>
+
+              {isActiveRecording && (
+                <Pressable onPress={stopRecording} style={styles.secondaryBtn}>
+                  <View style={styles.stopIcon} />
+                </Pressable>
+              )}
+            </View>
+
+            <Text style={styles.durationHint}>
+              {phase === 'recording'
+                ? `Max ${formatDuration(MAX_DURATION_MS)}`
+                : phase === 'paused'
+                  ? 'Tap mic to resume, square to finish'
+                  : `Min 15s / Max 5min`
+              }
+            </Text>
+          </View>
         </View>
       )}
     </View>
@@ -356,17 +490,40 @@ const styles = StyleSheet.create({
   },
   recordContainer: {
     flex: 1,
+    paddingHorizontal: 20,
+  },
+  toolsRow: {
+    gap: 8,
+    paddingTop: 8,
+  },
+  centerArea: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
-    gap: 16,
+    gap: 12,
+  },
+  segmentIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 215, 0, 0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.15)',
+  },
+  segmentText: {
+    color: Colors.accent,
+    fontSize: 12,
+    fontFamily: 'DMSans_600SemiBold',
   },
   waveformLive: {
     flexDirection: 'row',
     alignItems: 'center',
     height: 60,
     gap: 2,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   timer: {
     color: Colors.text,
@@ -381,12 +538,18 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase' as const,
     letterSpacing: 1,
   },
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 28,
+    marginTop: 20,
+  },
   recBtnContainer: {
     width: 100,
     height: 100,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 24,
   },
   recPulse: {
     position: 'absolute',
@@ -407,17 +570,27 @@ const styles = StyleSheet.create({
   recBtnActive: {
     backgroundColor: Colors.danger,
   },
+  secondaryBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
   stopIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 4,
-    backgroundColor: Colors.bg,
+    width: 20,
+    height: 20,
+    borderRadius: 3,
+    backgroundColor: Colors.text,
   },
   durationHint: {
     color: Colors.textMuted,
     fontSize: 12,
     fontFamily: 'DMSans_400Regular',
-    marginTop: 20,
+    marginTop: 16,
   },
   reviewContainer: {
     flex: 1,
@@ -445,6 +618,17 @@ const styles = StyleSheet.create({
     color: Colors.textDim,
     fontSize: 14,
     fontFamily: 'DMSans_400Regular',
+  },
+  segmentBadge: {
+    color: Colors.accent,
+    fontSize: 12,
+    fontFamily: 'DMSans_600SemiBold',
+    backgroundColor: 'rgba(255, 215, 0, 0.08)',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginTop: 4,
   },
   titleInput: {
     backgroundColor: Colors.surface,
