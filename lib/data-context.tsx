@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getApiUrl } from './query-client';
 import { Platform } from 'react-native';
+import { useAuth } from './auth-context';
 
 export interface UserProfile {
   id: string;
@@ -74,16 +75,9 @@ function generateWaveform(length: number = 40): number[] {
   return data;
 }
 
-const SAMPLE_USERS: UserProfile[] = [
-  { id: 'user_1', username: 'melodyjane', displayName: 'Melody Jane', bio: 'Singer-songwriter sharing daily vibes', avatarUri: null, followerCount: 2340, followingCount: 189 },
-  { id: 'user_2', username: 'djthunder', displayName: 'DJ Thunder', bio: 'Electronic beats & bass drops', avatarUri: null, followerCount: 8900, followingCount: 432 },
-  { id: 'user_3', username: 'podcastpro', displayName: 'Sarah Chen', bio: 'Daily tech podcast host', avatarUri: null, followerCount: 15600, followingCount: 312 },
-  { id: 'user_4', username: 'acousticvibes', displayName: 'Marcus Bell', bio: 'Guitar loops & acoustic sessions', avatarUri: null, followerCount: 4200, followingCount: 267 },
-  { id: 'user_5', username: 'voicenotes', displayName: 'Luna Park', bio: 'Storytelling through sound', avatarUri: null, followerCount: 6700, followingCount: 198 },
-];
-
 interface ServerSolo {
   id: string;
+  userId: string;
   username: string;
   audioUrl: string;
   timestamp: string;
@@ -97,13 +91,14 @@ interface ServerSolo {
 function serverSoloToPost(solo: ServerSolo): AudioPost {
   const baseUrl = getApiUrl();
   const audioUri = solo.audioUrl.startsWith('/') ? `${baseUrl}${solo.audioUrl.slice(1)}` : solo.audioUrl;
+  const avatarUri = solo.avatarUrl?.startsWith('/') ? `${baseUrl}${solo.avatarUrl.slice(1)}` : solo.avatarUrl;
 
   return {
     id: solo.id,
-    userId: solo.username,
+    userId: solo.userId || solo.username,
     username: solo.username,
     displayName: solo.displayName || solo.username,
-    avatarUri: solo.avatarUrl,
+    avatarUri: avatarUri || null,
     title: solo.title,
     audioUri,
     durationMs: solo.durationMs,
@@ -117,18 +112,34 @@ function serverSoloToPost(solo: ServerSolo): AudioPost {
   };
 }
 
-const DEFAULT_USER: UserProfile = {
-  id: 'me',
-  username: 'soloist',
-  displayName: 'Solo User',
-  bio: 'Sharing sounds with the world',
-  avatarUri: null,
-  followerCount: 0,
-  followingCount: 0,
-};
-
 export function DataProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<UserProfile>(DEFAULT_USER);
+  const { user: authUser } = useAuth();
+
+  const currentUser = useMemo<UserProfile>(() => {
+    if (!authUser || !authUser.username) {
+      return {
+        id: 'anonymous',
+        username: 'anonymous',
+        displayName: 'Anonymous',
+        bio: '',
+        avatarUri: null,
+        followerCount: 0,
+        followingCount: 0,
+      };
+    }
+    const baseUrl = getApiUrl();
+    const avatarUri = authUser.avatarUrl?.startsWith('/') ? `${baseUrl}${authUser.avatarUrl.slice(1)}` : authUser.avatarUrl;
+    return {
+      id: authUser.id,
+      username: authUser.username,
+      displayName: authUser.username,
+      bio: authUser.bio || '',
+      avatarUri: avatarUri || null,
+      followerCount: 0,
+      followingCount: 0,
+    };
+  }, [authUser]);
+
   const [localLikes, setLocalLikes] = useState<Set<string>>(new Set());
   const [localComments, setLocalComments] = useState<Record<string, Comment[]>>({});
   const [following, setFollowing] = useState<Set<string>>(new Set());
@@ -143,9 +154,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    AsyncStorage.getItem('solo_profile').then(data => {
-      if (data) setCurrentUser(JSON.parse(data));
-    });
     AsyncStorage.getItem('solo_following').then(data => {
       if (data) setFollowing(new Set(JSON.parse(data)));
     });
@@ -153,10 +161,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (data) setLocalLikes(new Set(JSON.parse(data)));
     });
   }, []);
-
-  useEffect(() => {
-    AsyncStorage.setItem('solo_profile', JSON.stringify(currentUser));
-  }, [currentUser]);
 
   useEffect(() => {
     AsyncStorage.setItem('solo_following', JSON.stringify([...following]));
@@ -176,12 +180,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
   }, [serverSolos, localLikes, localComments]);
 
-  const updateProfile = useCallback((updates: Partial<UserProfile>) => {
-    setCurrentUser(prev => ({ ...prev, ...updates }));
+  const updateProfile = useCallback((_updates: Partial<UserProfile>) => {
   }, []);
 
-  const addPost = useCallback((post: Omit<AudioPost, 'id' | 'likes' | 'liked' | 'comments' | 'createdAt' | 'waveformData'>) => {
-    // kept for compatibility but uploadAndPost is preferred
+  const addPost = useCallback((_post: Omit<AudioPost, 'id' | 'likes' | 'liked' | 'comments' | 'createdAt' | 'waveformData'>) => {
   }, []);
 
   const uploadAndPost = useCallback(async (params: {
@@ -205,15 +207,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
         formData.append('audio', file as any);
       }
 
-      formData.append('username', currentUser.username);
-      formData.append('displayName', currentUser.displayName);
       formData.append('title', params.title);
       formData.append('durationMs', params.durationMs.toString());
       if (params.tags) {
         formData.append('tags', JSON.stringify(params.tags));
-      }
-      if (currentUser.avatarUri) {
-        formData.append('avatarUrl', currentUser.avatarUri);
       }
 
       const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
@@ -221,7 +218,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const res = await fetchFn(new URL('/api/solos', baseUrl).toString(), {
         method: 'POST',
         body: formData,
-      });
+        credentials: 'include',
+      } as any);
 
       if (!res.ok) {
         const errorText = await res.text();
@@ -232,7 +230,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsUploading(false);
     }
-  }, [currentUser, queryClient]);
+  }, [queryClient]);
 
   const toggleLike = useCallback((postId: string) => {
     setLocalLikes(prev => {
@@ -282,12 +280,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     );
   }, [posts]);
 
-  const searchUsers = useCallback((query: string) => {
-    const q = query.toLowerCase();
-    return SAMPLE_USERS.filter(u =>
-      u.username.toLowerCase().includes(q) ||
-      u.displayName.toLowerCase().includes(q)
-    );
+  const searchUsers = useCallback((_query: string) => {
+    return [] as UserProfile[];
   }, []);
 
   const refreshFeed = useCallback(() => {
@@ -306,7 +300,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     toggleFollow,
     searchPosts,
     searchUsers,
-    allUsers: SAMPLE_USERS,
+    allUsers: [] as UserProfile[],
     isUploading,
     refreshFeed,
   }), [currentUser, updateProfile, posts, addPost, uploadAndPost, toggleLike, addComment, following, toggleFollow, searchPosts, searchUsers, isUploading, refreshFeed]);

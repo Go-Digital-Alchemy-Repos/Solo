@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { StyleSheet, View, Text, Pressable, FlatList, Platform, Alert, TextInput as RNTextInput } from 'react-native';
+import { StyleSheet, View, Text, Pressable, FlatList, Platform, Alert, TextInput as RNTextInput, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
@@ -9,14 +9,18 @@ import Avatar from '@/components/Avatar';
 import SoundCard from '@/components/SoundCard';
 import SoloHeader from '@/components/SoloHeader';
 import { useData } from '@/lib/data-context';
+import { useAuth } from '@/lib/auth-context';
+import { getApiUrl } from '@/lib/query-client';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, updateProfile, posts } = useData();
+  const { currentUser, posts } = useData();
+  const { user: authUser, logout, updateUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState(currentUser.displayName);
   const [editUsername, setEditUsername] = useState(currentUser.username);
   const [editBio, setEditBio] = useState(currentUser.bio);
+  const [editAvatarUri, setEditAvatarUri] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
   const myPosts = posts.filter(p => p.userId === currentUser.id);
@@ -34,7 +38,7 @@ export default function ProfileScreen() {
         quality: 0.8,
       });
       if (!result.canceled && result.assets[0]) {
-        updateProfile({ avatarUri: result.assets[0].uri });
+        setEditAvatarUri(result.assets[0].uri);
       }
       return;
     }
@@ -51,7 +55,7 @@ export default function ProfileScreen() {
             quality: 0.8,
           });
           if (!result.canceled && result.assets[0]) {
-            updateProfile({ avatarUri: result.assets[0].uri });
+            setEditAvatarUri(result.assets[0].uri);
           }
         },
       },
@@ -65,59 +69,105 @@ export default function ProfileScreen() {
             quality: 0.8,
           });
           if (!result.canceled && result.assets[0]) {
-            updateProfile({ avatarUri: result.assets[0].uri });
+            setEditAvatarUri(result.assets[0].uri);
           }
         },
       },
       { text: 'Cancel', style: 'cancel' },
     ]);
-  }, [updateProfile]);
+  }, []);
 
-  const saveEdits = useCallback(() => {
-    updateProfile({
-      displayName: editName.trim() || currentUser.displayName,
-      username: editUsername.trim() || currentUser.username,
-      bio: editBio.trim(),
-    });
-    setIsEditing(false);
-    if (Platform.OS !== 'web') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  const saveEdits = useCallback(async () => {
+    setSaving(true);
+    try {
+      const baseUrl = getApiUrl();
+      const formData = new FormData();
+
+      const trimmedUsername = editUsername.trim().toLowerCase();
+      if (trimmedUsername && trimmedUsername !== currentUser.username) {
+        formData.append('username', trimmedUsername);
+      }
+      formData.append('bio', editBio.trim());
+
+      if (editAvatarUri) {
+        if (Platform.OS === 'web') {
+          const response = await globalThis.fetch(editAvatarUri);
+          const blob = await response.blob();
+          formData.append('avatar', blob, 'avatar.jpg');
+        } else {
+          const { File } = await import('expo-file-system');
+          const file = new File(editAvatarUri);
+          formData.append('avatar', file as any);
+        }
+      }
+
+      const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
+      const res = await fetchFn(new URL('/api/auth/profile', baseUrl).toString(), {
+        method: 'PUT',
+        body: formData,
+        credentials: 'include',
+      } as any);
+
+      if (!res.ok) {
+        const data = await res.json();
+        Alert.alert('Error', data.error || 'Failed to update profile');
+        return;
+      }
+
+      const updated = await res.json();
+      updateUser(updated);
+      setIsEditing(false);
+      setEditAvatarUri(null);
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to save');
+    } finally {
+      setSaving(false);
     }
-  }, [editName, editUsername, editBio, updateProfile, currentUser]);
+  }, [editUsername, editBio, editAvatarUri, currentUser, updateUser]);
 
   const startEditing = useCallback(() => {
-    setEditName(currentUser.displayName);
     setEditUsername(currentUser.username);
     setEditBio(currentUser.bio);
+    setEditAvatarUri(null);
     setIsEditing(true);
   }, [currentUser]);
 
+  const handleLogout = useCallback(() => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          await logout();
+        },
+      },
+    ]);
+  }, [logout]);
+
   const ProfileHeader = () => (
     <View style={styles.profileSection}>
-      <Pressable onPress={pickImage} style={styles.avatarContainer}>
-        <Avatar uri={currentUser.avatarUri} size={90} borderWidth={3} />
-        <View style={styles.cameraIcon}>
-          <Ionicons name="camera" size={16} color={Colors.bg} />
-        </View>
+      <Pressable onPress={isEditing ? pickImage : undefined} style={styles.avatarContainer}>
+        <Avatar uri={editAvatarUri || currentUser.avatarUri} size={90} borderWidth={3} />
+        {isEditing && (
+          <View style={styles.cameraIcon}>
+            <Ionicons name="camera" size={16} color={Colors.bg} />
+          </View>
+        )}
       </Pressable>
 
       {isEditing ? (
         <View style={styles.editSection}>
           <View style={styles.editField}>
-            <Text style={styles.editLabel}>Display Name</Text>
-            <RNTextInput
-              style={styles.editInput}
-              value={editName}
-              onChangeText={setEditName}
-              placeholderTextColor={Colors.textMuted}
-            />
-          </View>
-          <View style={styles.editField}>
             <Text style={styles.editLabel}>Username</Text>
             <RNTextInput
               style={styles.editInput}
               value={editUsername}
-              onChangeText={setEditUsername}
+              onChangeText={(t) => setEditUsername(t.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
               placeholderTextColor={Colors.textMuted}
               autoCapitalize="none"
             />
@@ -130,14 +180,15 @@ export default function ProfileScreen() {
               onChangeText={setEditBio}
               placeholderTextColor={Colors.textMuted}
               multiline
+              maxLength={160}
             />
           </View>
           <View style={styles.editActions}>
-            <Pressable onPress={() => setIsEditing(false)} style={styles.cancelBtn}>
+            <Pressable onPress={() => { setIsEditing(false); setEditAvatarUri(null); }} style={styles.cancelBtn}>
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </Pressable>
-            <Pressable onPress={saveEdits} style={styles.saveBtn}>
-              <Text style={styles.saveBtnText}>Save</Text>
+            <Pressable onPress={saveEdits} style={[styles.saveBtn, saving && { opacity: 0.7 }]} disabled={saving}>
+              {saving ? <ActivityIndicator color={Colors.bg} size="small" /> : <Text style={styles.saveBtnText}>Save</Text>}
             </Pressable>
           </View>
         </View>
@@ -145,7 +196,7 @@ export default function ProfileScreen() {
         <>
           <Text style={styles.displayName}>{currentUser.displayName}</Text>
           <Text style={styles.username}>@{currentUser.username}</Text>
-          <Text style={styles.bio}>{currentUser.bio}</Text>
+          {!!currentUser.bio && <Text style={styles.bio}>{currentUser.bio}</Text>}
         </>
       )}
 
@@ -167,16 +218,21 @@ export default function ProfileScreen() {
       </View>
 
       {!isEditing && (
-        <Pressable
-          onPress={() => {
-            if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            startEditing();
-          }}
-          style={styles.editBtn}
-        >
-          <Feather name="edit-2" size={16} color={Colors.accent} />
-          <Text style={styles.editBtnText}>Edit Profile</Text>
-        </Pressable>
+        <View style={styles.actionRow}>
+          <Pressable
+            onPress={() => {
+              if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              startEditing();
+            }}
+            style={styles.editBtn}
+          >
+            <Feather name="edit-2" size={16} color={Colors.accent} />
+            <Text style={styles.editBtnText}>Edit Profile</Text>
+          </Pressable>
+          <Pressable onPress={handleLogout} style={styles.logoutBtn}>
+            <Ionicons name="log-out-outline" size={18} color={Colors.danger} />
+          </Pressable>
+        </View>
       )}
 
       {myPosts.length > 0 && (
@@ -281,11 +337,16 @@ const styles = StyleSheet.create({
     height: 24,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 16,
+  },
   editBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 16,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
@@ -296,6 +357,15 @@ const styles = StyleSheet.create({
     color: Colors.accent,
     fontSize: 14,
     fontFamily: 'DMSans_600SemiBold',
+  },
+  logoutBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 68, 68, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   editSection: {
     width: '100%',

@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -10,14 +10,51 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { PlaybackProvider } from "@/lib/playback-provider";
 import { DataProvider } from "@/lib/data-context";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
 
 SplashScreen.preventAutoHideAsync();
 
+function AuthGate() {
+  const { user, isLoading, isAuthenticated, needsProfileSetup } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const currentSegment = segments[0] as string;
+    const inAuthGroup = currentSegment === 'auth' || currentSegment === 'welcome';
+    const inProfileSetup = currentSegment === 'profile-setup';
+
+    if (!isAuthenticated) {
+      if (!inAuthGroup && currentSegment !== 'welcome') {
+        router.replace('/welcome' as any);
+      }
+    } else if (needsProfileSetup) {
+      if (!inProfileSetup) {
+        router.replace('/profile-setup' as any);
+      }
+    } else {
+      if (inAuthGroup || currentSegment === 'welcome' || inProfileSetup) {
+        router.replace('/(tabs)' as any);
+      }
+    }
+  }, [isLoading, isAuthenticated, needsProfileSetup, segments]);
+
+  return null;
+}
+
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerBackTitle: "Back" }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-    </Stack>
+    <>
+      <AuthGate />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="welcome" />
+        <Stack.Screen name="auth" />
+        <Stack.Screen name="profile-setup" />
+        <Stack.Screen name="(tabs)" />
+      </Stack>
+    </>
   );
 }
 
@@ -44,12 +81,14 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#000' }}>
           <KeyboardProvider>
-            <DataProvider>
-              <PlaybackProvider>
-                <StatusBar style="light" />
-                <RootLayoutNav />
-              </PlaybackProvider>
-            </DataProvider>
+            <AuthProvider>
+              <DataProvider>
+                <PlaybackProvider>
+                  <StatusBar style="light" />
+                  <RootLayoutNav />
+                </PlaybackProvider>
+              </DataProvider>
+            </AuthProvider>
           </KeyboardProvider>
         </GestureHandlerRootView>
       </QueryClientProvider>
