@@ -1,5 +1,8 @@
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
+import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
+import pg from "pg";
 import { registerRoutes } from "./routes";
 import * as fs from "fs";
 import * as path from "path";
@@ -236,9 +239,38 @@ function setupErrorHandler(app: express.Application) {
   });
 }
 
+function setupSession(app: express.Application) {
+  const PgStore = connectPgSimple(session);
+  const pool = new pg.Pool({
+    connectionString: process.env.DATABASE_URL,
+  });
+
+  app.set("trust proxy", 1);
+
+  app.use(
+    session({
+      store: new PgStore({
+        pool,
+        createTableIfMissing: true,
+        tableName: "session",
+      }),
+      secret: process.env.SESSION_SECRET || "solo-secret-fallback",
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "none",
+      },
+    }),
+  );
+}
+
 (async () => {
   setupCors(app);
   setupBodyParsing(app);
+  setupSession(app);
   setupRequestLogging(app);
 
   configureExpoAndLanding(app);
