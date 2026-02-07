@@ -379,17 +379,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const file = await toFile(compatBuffer, `audio.${format}`);
       const response = await openai.audio.transcriptions.create({
         file,
-        model: "whisper-1",
-        response_format: "verbose_json",
-        timestamp_granularities: ["word"],
-      });
+        model: "gpt-4o-mini-transcribe",
+      } as any);
+
+      const text = response.text || "";
+      const wordsFromText = text.split(/\s+/).filter(Boolean);
+      const durationSec = solo.durationMs / 1000;
+      const pauseFraction = 0.15;
+      const speakingDuration = durationSec * (1 - pauseFraction);
+      const wordDuration = speakingDuration / Math.max(wordsFromText.length, 1);
+      const startOffset = durationSec * (pauseFraction / 2);
 
       const transcript: Transcript = {
-        text: response.text || "",
-        words: ((response as any).words || []).map((w: any) => ({
-          word: w.word,
-          start: w.start,
-          end: w.end,
+        text,
+        words: wordsFromText.map((w, i) => ({
+          word: w,
+          start: startOffset + i * wordDuration,
+          end: startOffset + (i + 1) * wordDuration,
         })),
       };
 
