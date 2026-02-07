@@ -25,6 +25,17 @@ export interface Comment {
   createdAt: number;
 }
 
+export interface TranscriptWord {
+  word: string;
+  start: number;
+  end: number;
+}
+
+export interface Transcript {
+  text: string;
+  words: TranscriptWord[];
+}
+
 export interface AudioPost {
   id: string;
   userId: string;
@@ -41,6 +52,7 @@ export interface AudioPost {
   comments: Comment[];
   createdAt: number;
   waveformData: number[];
+  transcript: Transcript | null;
 }
 
 interface DataContextValue {
@@ -86,6 +98,7 @@ interface ServerSolo {
   title: string;
   durationMs: number;
   displayName: string | null;
+  transcript: Transcript | null;
 }
 
 function serverSoloToPost(solo: ServerSolo): AudioPost {
@@ -109,6 +122,7 @@ function serverSoloToPost(solo: ServerSolo): AudioPost {
     comments: [],
     createdAt: new Date(solo.timestamp).getTime(),
     waveformData: generateWaveform(),
+    transcript: solo.transcript || null,
   };
 }
 

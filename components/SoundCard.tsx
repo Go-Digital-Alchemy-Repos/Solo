@@ -1,13 +1,15 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput, FlatList, Platform } from 'react-native';
-import { Ionicons, Feather } from '@expo/vector-icons';
+import { View, Text, StyleSheet, Pressable, TextInput, FlatList, Platform, ActivityIndicator } from 'react-native';
+import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { useAnimatedStyle, withSpring, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import Colors from '@/constants/colors';
 import Avatar from './Avatar';
 import WaveformBars from './WaveformBars';
+import LyricView from './LyricView';
 import { usePlayback } from '@/lib/playback-provider';
-import { useData, type AudioPost } from '@/lib/data-context';
+import { useData, type AudioPost, type Transcript } from '@/lib/data-context';
+import { getApiUrl } from '@/lib/query-client';
 
 interface SoundCardProps {
   post: AudioPost;
@@ -36,6 +38,9 @@ export default function SoundCard({ post }: SoundCardProps) {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [fullMode, setFullMode] = useState(false);
+  const [showLyrics, setShowLyrics] = useState(false);
+  const [transcript, setTranscript] = useState<Transcript | null>(post.transcript);
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   const isThisPlaying = state.currentPostId === post.id && state.isPlaying;
   const isThisLoaded = state.currentPostId === post.id;
@@ -84,6 +89,40 @@ export default function SoundCard({ post }: SoundCardProps) {
     await play(post.id, post.audioUri, 0);
   }, [play, post]);
 
+  const handleToggleLyrics = useCallback(async () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    if (showLyrics) {
+      setShowLyrics(false);
+      return;
+    }
+    if (transcript && transcript.words.length > 0) {
+      setShowLyrics(true);
+      return;
+    }
+    setIsTranscribing(true);
+    try {
+      const baseUrl = getApiUrl();
+      const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
+      const res = await fetchFn(new URL(`/api/solos/${post.id}/transcribe`, baseUrl).toString(), {
+        method: 'POST',
+        credentials: 'include',
+      } as any);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.transcript && data.transcript.words?.length > 0) {
+          setTranscript(data.transcript);
+          setShowLyrics(true);
+        }
+      }
+    } catch (e) {
+      console.error('Transcription failed:', e);
+    } finally {
+      setIsTranscribing(false);
+    }
+  }, [showLyrics, transcript, post.id]);
+
   const isFollowing = following.has(post.userId);
 
   return (
@@ -119,13 +158,22 @@ export default function SoundCard({ post }: SoundCardProps) {
       )}
 
       <View style={styles.waveformContainer}>
-        <WaveformBars
-          data={post.waveformData}
-          isPlaying={isThisPlaying}
-          progress={progress}
-          height={48}
-          barWidth={3}
-        />
+        {showLyrics && transcript ? (
+          <LyricView
+            words={transcript.words}
+            positionMs={isThisLoaded ? state.positionMillis : 0}
+            isActive={isThisLoaded}
+            height={80}
+          />
+        ) : (
+          <WaveformBars
+            data={post.waveformData}
+            isPlaying={isThisPlaying}
+            progress={progress}
+            height={48}
+            barWidth={3}
+          />
+        )}
       </View>
 
       <View style={styles.controls}>
@@ -145,6 +193,17 @@ export default function SoundCard({ post }: SoundCardProps) {
             {formatTime(post.durationMs)}
           </Text>
         </View>
+        <Pressable onPress={handleToggleLyrics} style={styles.transcriptBtn} disabled={isTranscribing}>
+          {isTranscribing ? (
+            <ActivityIndicator size="small" color={Colors.accent} />
+          ) : (
+            <MaterialCommunityIcons
+              name={showLyrics ? 'waveform' : 'text-box-outline'}
+              size={18}
+              color={showLyrics ? Colors.accent : Colors.textDim}
+            />
+          )}
+        </Pressable>
         {post.isRSS && !fullMode && (
           <Pressable onPress={handleListenFull} style={styles.fullBtn}>
             <Feather name="headphones" size={14} color={Colors.accent} />
@@ -329,11 +388,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginHorizontal: 2,
   },
+  transcriptBtn: {
+    marginLeft: 'auto' as const,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
   fullBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginLeft: 'auto' as const,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,

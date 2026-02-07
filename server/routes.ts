@@ -4,10 +4,13 @@ import multer from "multer";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { solos, users } from "@shared/schema";
+import type { Transcript } from "@shared/schema";
 import { desc, eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
+import { openai, ensureCompatibleFormat } from "./replit_integrations/audio/client";
+import { toFile } from "openai";
 
 declare module "express-session" {
   interface SessionData {
@@ -345,6 +348,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.set("Access-Control-Allow-Headers", "Range, Content-Type");
     res.set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges");
     return res.sendStatus(204);
+  });
+
+  app.post("/api/solos/:soloId/transcribe", async (req, res) => {
+    const userId = await requireAuth(req, res);
+    if (!userId) return;
+
+    try {
+      const { soloId } = req.params;
+      const [solo] = await db.select().from(solos).where(eq(solos.id, soloId)).limit(1);
+      if (!solo) {
+        return res.status(404).json({ error: "Solo not found" });
+      }
+
+      if (solo.transcript) {
+        return res.json({ transcript: solo.transcript });
+      }
+
+      const fileId = solo.audioUrl.replace('/api/audio/', '');
+      const sanitized = fileId.replace(/[^a-zA-Z0-9\-]/g, "");
+      const filePath = path.join(UPLOADS_DIR, `${sanitized}.m4a`);
+
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: "Audio file not found" });
+      }
+
+      const audioBuffer = fs.readFileSync(filePath);
+      const { buffer: compatBuffer, format } = await ensureCompatibleFormat(Buffer.from(audioBuffer));
+
+      const file = await toFile(compatBuffer, `audio.${format}`);
+      const response = await openai.audio.transcriptions.create({
+        file,
+        model: "whisper-1",
+        response_format: "verbose_json",
+        timestamp_granularities: ["word"],
+      });
+
+      const transcript: Transcript = {
+        text: response.text || "",
+        words: ((response as any).words || []).map((w: any) => ({
+          word: w.word,
+          start: w.start,
+          end: w.end,
+        })),
+      };
+
+      await db.update(solos)
+        .set({ transcript })
+        .where(eq(solos.id, soloId));
+
+      return res.json({ transcript });
+    } catch (error) {
+      console.error("Transcription error:", error);
+      return res.status(500).json({ error: "Failed to transcribe audio" });
+    }
   });
 
   const httpServer = createServer(app);
