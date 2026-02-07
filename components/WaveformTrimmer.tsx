@@ -396,13 +396,14 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
         <Text style={styles.scrubHint}>Drag across waveform to scrub</Text>
       </View>
 
-      <View style={[styles.controls, { paddingBottom: bottomInset + 8 }]}>
+      <View style={styles.controls}>
         <Pressable
           onPress={togglePlayPause}
           style={styles.playPauseBtn}
         >
           <Ionicons name={isPlaying ? "pause" : "play"} size={30} color={Colors.bg} />
         </Pressable>
+        <Text style={styles.previewLabel}>{isPlaying ? 'Playing' : 'Preview'}</Text>
       </View>
     </View>
   );
@@ -592,7 +593,9 @@ const styles = StyleSheet.create({
   },
   controls: {
     alignItems: 'center',
-    marginTop: 'auto',
+    marginTop: 24,
+    gap: 6,
+    paddingBottom: 20,
   },
   playPauseBtn: {
     width: 64,
@@ -601,5 +604,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  previewLabel: {
+    color: Colors.textDim,
+    fontSize: 12,
+    fontFamily: 'DMSans_500Medium',
   },
 });

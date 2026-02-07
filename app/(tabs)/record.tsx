@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable, Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Audio } from 'expo-av';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -101,6 +102,7 @@ function ProcessingScreen() {
 
 export default function RecordScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { uploadAndPost } = useData();
   const [phase, setPhase] = useState<RecordPhase>('idle');
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -289,7 +291,7 @@ export default function RecordScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
       resetAll();
-      Alert.alert('Posted!', 'Your Solo has been shared.');
+      router.replace('/(tabs)/');
     } catch (e) {
       console.error('Failed to upload:', e);
       setPhase('editing');

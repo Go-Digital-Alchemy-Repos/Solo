@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { StyleSheet, View, Text, TextInput, Pressable, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Colors from '@/constants/colors';
 
 interface TeleprompterProps {
@@ -9,21 +8,33 @@ interface TeleprompterProps {
   isPaused: boolean;
 }
 
-const MIN_SPEED = 10;
-const MAX_SPEED = 80;
-const DEFAULT_SPEED = 30;
+const SPEED_OPTIONS = [
+  { label: '0.5x', multiplier: 0.5 },
+  { label: '1.0x', multiplier: 1.0 },
+  { label: '1.2x', multiplier: 1.2 },
+  { label: '1.5x', multiplier: 1.5 },
+  { label: '2.0x', multiplier: 2.0 },
+];
+
+const BASELINE_WPM = 160;
+const AVG_WORD_HEIGHT_PX = 2.2;
+
+function wpmToPixelsPerSec(wpm: number): number {
+  return (wpm / 60) * AVG_WORD_HEIGHT_PX;
+}
 
 export default function Teleprompter({ isRecording, isPaused }: TeleprompterProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [text, setText] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [speed, setSpeed] = useState(DEFAULT_SPEED);
-  const [showSpeedSlider, setShowSpeedSlider] = useState(false);
+  const [speedMultiplier, setSpeedMultiplier] = useState(1.0);
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const sliderWidthRef = useRef(0);
+
+  const effectiveWPM = BASELINE_WPM * speedMultiplier;
+  const scrollSpeed = wpmToPixelsPerSec(effectiveWPM);
 
   useEffect(() => {
     if (intervalRef.current) {
@@ -33,7 +44,7 @@ export default function Teleprompter({ isRecording, isPaused }: TeleprompterProp
 
     if (isRecording && !isPaused && text.length > 0 && isExpanded && autoScroll) {
       intervalRef.current = setInterval(() => {
-        scrollY.current += speed / 60;
+        scrollY.current += scrollSpeed / 60;
         scrollRef.current?.scrollTo({ y: scrollY.current, animated: false });
       }, 1000 / 60);
     }
@@ -44,7 +55,7 @@ export default function Teleprompter({ isRecording, isPaused }: TeleprompterProp
         intervalRef.current = null;
       }
     };
-  }, [isRecording, isPaused, text, isExpanded, autoScroll, speed]);
+  }, [isRecording, isPaused, text, isExpanded, autoScroll, scrollSpeed]);
 
   useEffect(() => {
     if (!isRecording && !isPaused) {
@@ -57,14 +68,8 @@ export default function Teleprompter({ isRecording, isPaused }: TeleprompterProp
     setIsExpanded(prev => !prev);
   }, []);
 
-  const handleSpeedSliderGesture = useCallback((locationX: number) => {
-    if (sliderWidthRef.current <= 0) return;
-    const frac = Math.max(0, Math.min(1, locationX / sliderWidthRef.current));
-    const newSpeed = Math.round(MIN_SPEED + frac * (MAX_SPEED - MIN_SPEED));
-    setSpeed(newSpeed);
-  }, []);
-
-  const speedFrac = (speed - MIN_SPEED) / (MAX_SPEED - MIN_SPEED);
+  const activelyScrolling = isRecording && !isPaused && text.length > 0 && autoScroll;
+  const isActiveSession = isRecording || isPaused;
 
   if (!isExpanded) {
     return (
@@ -75,9 +80,6 @@ export default function Teleprompter({ isRecording, isPaused }: TeleprompterProp
       </Pressable>
     );
   }
-
-  const activelyScrolling = isRecording && !isPaused && text.length > 0 && autoScroll;
-  const isActiveSession = isRecording || isPaused;
 
   return (
     <View style={styles.container}>
@@ -154,38 +156,33 @@ export default function Teleprompter({ isRecording, isPaused }: TeleprompterProp
           </Text>
         </Pressable>
 
-        <Pressable
-          onPress={() => setShowSpeedSlider(!showSpeedSlider)}
-          style={[styles.toggleBtn, showSpeedSlider && styles.toggleBtnActive]}
-          hitSlop={8}
-        >
-          <Ionicons
-            name="speedometer-outline"
-            size={16}
-            color={showSpeedSlider ? Colors.bg : Colors.textDim}
-          />
-          <Text style={[styles.toggleText, showSpeedSlider && styles.toggleTextActive]}>
-            Speed
-          </Text>
-        </Pressable>
-
-        {showSpeedSlider && (
-          <View style={styles.sliderContainer}>
-            <View
-              style={styles.sliderTrack}
-              onLayout={(e) => { sliderWidthRef.current = e.nativeEvent.layout.width; }}
-              onStartShouldSetResponder={() => true}
-              onMoveShouldSetResponder={() => true}
-              onResponderGrant={(e) => handleSpeedSliderGesture(e.nativeEvent.locationX)}
-              onResponderMove={(e) => handleSpeedSliderGesture(e.nativeEvent.locationX)}
+        <View style={styles.speedRow}>
+          {SPEED_OPTIONS.map((opt) => (
+            <Pressable
+              key={opt.label}
+              onPress={() => setSpeedMultiplier(opt.multiplier)}
+              style={[
+                styles.speedChip,
+                speedMultiplier === opt.multiplier && styles.speedChipActive,
+              ]}
+              hitSlop={4}
             >
-              <View style={[styles.sliderFill, { width: `${speedFrac * 100}%` }]} />
-              <View style={[styles.sliderThumb, { left: `${speedFrac * 100}%` }]} />
-            </View>
-            <Text style={styles.speedLabel}>{speed}px/s</Text>
-          </View>
-        )}
+              <Text
+                style={[
+                  styles.speedChipText,
+                  speedMultiplier === opt.multiplier && styles.speedChipTextActive,
+                ]}
+              >
+                {opt.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
+
+      {text.length > 0 && (
+        <Text style={styles.wpmLabel}>{Math.round(effectiveWPM)} words/min</Text>
+      )}
     </View>
   );
 }
@@ -320,7 +317,6 @@ const styles = StyleSheet.create({
     gap: 8,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 215, 0, 0.08)',
-    flexWrap: 'wrap',
   },
   toggleBtn: {
     flexDirection: 'row',
@@ -345,43 +341,38 @@ const styles = StyleSheet.create({
   toggleTextActive: {
     color: Colors.bg,
   },
-  sliderContainer: {
+  speedRow: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    minWidth: 100,
+    gap: 4,
+    justifyContent: 'flex-end',
   },
-  sliderTrack: {
-    flex: 1,
-    height: 24,
+  speedChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    justifyContent: 'center',
-    position: 'relative',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
-  sliderFill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 215, 0, 0.25)',
-    borderRadius: 12,
-  },
-  sliderThumb: {
-    position: 'absolute',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+  speedChipActive: {
     backgroundColor: Colors.accent,
-    marginLeft: -9,
-    top: 3,
+    borderColor: Colors.accent,
   },
-  speedLabel: {
+  speedChipText: {
     color: Colors.textDim,
     fontSize: 11,
-    fontFamily: 'DMSans_500Medium',
-    fontVariant: ['tabular-nums'],
-    minWidth: 38,
+    fontFamily: 'DMSans_600SemiBold',
+  },
+  speedChipTextActive: {
+    color: Colors.bg,
+  },
+  wpmLabel: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    fontFamily: 'DMSans_400Regular',
+    textAlign: 'center',
+    paddingBottom: 6,
   },
 });

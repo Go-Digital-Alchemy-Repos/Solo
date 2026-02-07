@@ -63,7 +63,7 @@ async function mixVibeIntoAudio(audioBuffer: Buffer, vibeId: string): Promise<Bu
       const ffmpeg = spawn("ffmpeg", [
         "-i", inputPath,
         "-i", vibePath,
-        "-filter_complex", "[1:a]volume=0.10[bg];[0:a][bg]amix=inputs=2:duration=first:dropout_transition=2",
+        "-filter_complex", "[0:a]volume=1.0[voice];[1:a]volume=0.10[bg];[voice][bg]amix=inputs=2:duration=first:dropout_transition=2:weights=10 1",
         "-c:a", "aac",
         "-b:a", "192k",
         "-y",
