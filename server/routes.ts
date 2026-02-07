@@ -11,6 +11,9 @@ import * as fs from "fs";
 import * as path from "path";
 import { openai, ensureCompatibleFormat } from "./replit_integrations/audio/client";
 import { toFile } from "openai";
+import { spawn } from "child_process";
+import { tmpdir } from "os";
+import { writeFile, unlink, readFile } from "fs/promises";
 
 declare module "express-session" {
   interface SessionData {
@@ -36,6 +39,35 @@ async function requireAuth(req: Request, res: Response): Promise<string | null> 
     return null;
   }
   return userId;
+}
+
+async function trimAudio(audioBuffer: Buffer, trimStartSec: number, trimEndSec: number): Promise<Buffer> {
+  const inputPath = path.join(tmpdir(), `trim-in-${randomUUID()}`);
+  const outputPath = path.join(tmpdir(), `trim-out-${randomUUID()}.m4a`);
+  try {
+    await writeFile(inputPath, audioBuffer);
+    const duration = trimEndSec - trimStartSec;
+    await new Promise<void>((resolve, reject) => {
+      const ffmpeg = spawn("ffmpeg", [
+        "-i", inputPath,
+        "-ss", trimStartSec.toString(),
+        "-t", duration.toString(),
+        "-c", "copy",
+        "-y",
+        outputPath,
+      ]);
+      ffmpeg.stderr.on("data", () => {});
+      ffmpeg.on("close", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`ffmpeg trim exited with code ${code}`));
+      });
+      ffmpeg.on("error", reject);
+    });
+    return await readFile(outputPath);
+  } finally {
+    await unlink(inputPath).catch(() => {});
+    await unlink(outputPath).catch(() => {});
+  }
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -225,7 +257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No audio file provided" });
       }
 
-      const { title, durationMs, tags } = req.body;
+      const { title, durationMs, tags, trimStartMs, trimEndMs } = req.body;
       if (!title) {
         return res.status(400).json({ error: "title is required" });
       }
@@ -235,10 +267,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Complete your profile setup first" });
       }
 
+      let audioData = file.buffer;
+      const trimStart = trimStartMs ? parseFloat(trimStartMs) / 1000 : null;
+      const trimEnd = trimEndMs ? parseFloat(trimEndMs) / 1000 : null;
+      if (trimStart !== null && trimEnd !== null && trimEnd > trimStart) {
+        audioData = await trimAudio(Buffer.from(audioData), trimStart, trimEnd);
+      }
+
       const fileId = randomUUID();
       const fileName = `${fileId}.m4a`;
       const filePath = path.join(UPLOADS_DIR, fileName);
-      fs.writeFileSync(filePath, file.buffer);
+      fs.writeFileSync(filePath, audioData);
 
       const audioUrl = `/api/audio/${fileId}`;
       const parsedTags = tags ? (typeof tags === 'string' ? JSON.parse(tags) : tags) : [];
