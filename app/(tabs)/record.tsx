@@ -1,8 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { StyleSheet, View, Text, Pressable, Platform, TextInput, Alert, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
-import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming, withSequence, Easing } from 'react-native-reanimated';
 import Colors from '@/constants/colors';
@@ -15,7 +15,7 @@ import { useData } from '@/lib/data-context';
 const MAX_DURATION_MS = 300000;
 const MIN_DURATION_MS = 15000;
 
-type RecordPhase = 'idle' | 'recording' | 'paused' | 'editing' | 'review';
+type RecordPhase = 'idle' | 'recording' | 'paused' | 'editing' | 'processing';
 
 function LiveBar({ index, isRecording }: { index: number; isRecording: boolean }) {
   const height = useSharedValue(8);
@@ -59,34 +59,59 @@ function LiveBar({ index, isRecording }: { index: number; isRecording: boolean }
   );
 }
 
-function SegmentDivider() {
+function ProcessingScreen() {
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(0.4);
+
+  useEffect(() => {
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.6, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+    );
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.1, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.4, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+    );
+  }, []);
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
   return (
-    <View style={{
-      width: 2,
-      height: 40,
-      backgroundColor: Colors.danger,
-      borderRadius: 1,
-      opacity: 0.7,
-      marginHorizontal: 1,
-    }} />
+    <View style={styles.processingContainer}>
+      <View style={styles.processingCircleWrap}>
+        <Animated.View style={[styles.processingPulse, pulseStyle]} />
+        <View style={styles.processingCircle}>
+          <Ionicons name="cloud-upload" size={36} color={Colors.bg} />
+        </View>
+      </View>
+      <Text style={styles.processingTitle}>Processing your Solo</Text>
+      <Text style={styles.processingSubtitle}>Trimming, mixing & uploading...</Text>
+    </View>
   );
 }
 
 export default function RecordScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, uploadAndPost, isUploading } = useData();
+  const { uploadAndPost } = useData();
   const [phase, setPhase] = useState<RecordPhase>('idle');
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
-  const [trimData, setTrimData] = useState<{ startMs: number; endMs: number } | null>(null);
-  const [title, setTitle] = useState('');
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [selectedVibe, setSelectedVibe] = useState<string | null>(null);
   const [segmentCount, setSegmentCount] = useState(1);
   const [segmentMarkers, setSegmentMarkers] = useState<number[]>([]);
+  const [isPosting, setIsPosting] = useState(false);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
   const pulseScale = useSharedValue(1);
   const pulseOpacity = useSharedValue(0.3);
@@ -123,6 +148,16 @@ export default function RecordScreen() {
     transform: [{ scale: pulseScale.value }],
     opacity: pulseOpacity.value,
   }));
+
+  const resetAll = useCallback(() => {
+    setRecordedUri(null);
+    setRecordingDuration(0);
+    setPhase('idle');
+    setSelectedVibe(null);
+    setSegmentCount(1);
+    setSegmentMarkers([]);
+    setIsPosting(false);
+  }, []);
 
   const startRecording = useCallback(async () => {
     try {
@@ -211,7 +246,6 @@ export default function RecordScreen() {
       const uri = recordingRef.current.getURI();
       setRecordedUri(uri);
       setPhase('editing');
-      setTrimData(null);
       recordingRef.current = null;
     } catch (e) {
       console.error('Failed to stop recording:', e);
@@ -228,71 +262,45 @@ export default function RecordScreen() {
       recordingRef.current = null;
     }
     if (intervalRef.current) clearInterval(intervalRef.current);
-    setRecordedUri(null);
-    setRecordingDuration(0);
-    setPhase('idle');
-    setTrimData(null);
-    setTitle('');
-    setSegmentCount(1);
-    setSegmentMarkers([]);
-  }, []);
+    resetAll();
+  }, [resetAll]);
 
-  const discardRecording = useCallback(() => {
-    setRecordedUri(null);
-    setRecordingDuration(0);
-    setPhase('idle');
-    setTrimData(null);
-    setTitle('');
-    setSegmentCount(1);
-    setSegmentMarkers([]);
-  }, []);
-
-  const handleTrimConfirm = useCallback((startMs: number, endMs: number) => {
-    setTrimData({ startMs, endMs });
-    setPhase('review');
-  }, []);
-
-  const handleTrimDiscard = useCallback(() => {
-    discardRecording();
-  }, [discardRecording]);
-
-  const effectiveDurationMs = trimData ? (trimData.endMs - trimData.startMs) : recordingDuration;
-
-  const saveRecording = useCallback(async () => {
-    if (!recordedUri || !title.trim()) {
-      Alert.alert('Missing Title', 'Please add a title for your recording.');
-      return;
-    }
-    if (effectiveDurationMs < MIN_DURATION_MS) {
+  const handlePost = useCallback(async (title: string, trimStartMs: number, trimEndMs: number) => {
+    if (!recordedUri) return;
+    const effectiveDuration = trimEndMs - trimStartMs;
+    if (effectiveDuration < MIN_DURATION_MS) {
       Alert.alert('Too Short', 'Your selection must be at least 15 seconds.');
       return;
     }
+
+    setIsPosting(true);
+    setPhase('processing');
+
     try {
       await uploadAndPost({
         audioUri: recordedUri,
-        title: title.trim(),
-        durationMs: effectiveDurationMs,
-        trimStartMs: trimData?.startMs,
-        trimEndMs: trimData?.endMs,
+        title,
+        durationMs: effectiveDuration,
+        trimStartMs,
+        trimEndMs,
         vibeId: selectedVibe || undefined,
       });
-      setRecordedUri(null);
-      setRecordingDuration(0);
-      setPhase('idle');
-      setTrimData(null);
-      setTitle('');
-      setSelectedVibe(null);
-      setSegmentCount(1);
-      setSegmentMarkers([]);
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      Alert.alert('Posted!', 'Your sound has been shared.');
+      resetAll();
+      Alert.alert('Posted!', 'Your Solo has been shared.');
     } catch (e) {
       console.error('Failed to upload:', e);
+      setPhase('editing');
+      setIsPosting(false);
       Alert.alert('Upload Failed', 'Could not upload your recording. Please try again.');
     }
-  }, [recordedUri, title, effectiveDurationMs, trimData, selectedVibe, uploadAndPost]);
+  }, [recordedUri, selectedVibe, uploadAndPost, resetAll]);
+
+  const handleEditCancel = useCallback(() => {
+    resetAll();
+  }, [resetAll]);
 
   const formatDuration = (ms: number) => {
     const totalSec = Math.floor(ms / 1000);
@@ -322,6 +330,30 @@ export default function RecordScreen() {
     );
   }
 
+  if (phase === 'processing') {
+    return (
+      <View style={styles.container}>
+        <SoloHeader />
+        <ProcessingScreen />
+      </View>
+    );
+  }
+
+  if (phase === 'editing' && recordedUri) {
+    return (
+      <View style={styles.container}>
+        <WaveformTrimmer
+          audioUri={recordedUri}
+          durationMs={recordingDuration}
+          onCancel={handleEditCancel}
+          onPost={handlePost}
+          isPosting={isPosting}
+          segmentMarkers={segmentMarkers}
+        />
+      </View>
+    );
+  }
+
   const bars = Array.from({ length: 50 }, (_, i) => i);
   const isActiveRecording = phase === 'recording' || phase === 'paused';
 
@@ -329,124 +361,79 @@ export default function RecordScreen() {
     <View style={styles.container}>
       <SoloHeader />
 
-      {phase === 'editing' && recordedUri ? (
-        <WaveformTrimmer
-          audioUri={recordedUri}
-          durationMs={recordingDuration}
-          onConfirm={handleTrimConfirm}
-          onDiscard={handleTrimDiscard}
-          segmentMarkers={segmentMarkers}
-        />
-      ) : phase === 'review' && recordedUri ? (
-        <View style={styles.reviewContainer}>
-          <View style={styles.reviewCard}>
-            <Ionicons name="checkmark-circle" size={48} color={Colors.accent} />
-            <Text style={styles.reviewDuration}>{formatDuration(effectiveDurationMs)}</Text>
-            <Text style={styles.reviewLabel}>
-              {trimData ? 'trimmed' : 'recorded'}
-              {selectedVibe ? ` + ${selectedVibe.replace('-', ' ')}` : ''}
-            </Text>
-            {segmentCount > 1 && (
-              <Text style={styles.segmentBadge}>{segmentCount} segments</Text>
-            )}
-          </View>
-          <TextInput
-            style={styles.titleInput}
-            placeholder="Give your sound a title..."
-            placeholderTextColor={Colors.textMuted}
-            value={title}
-            onChangeText={setTitle}
-            maxLength={80}
+      <View style={styles.recordContainer}>
+        <View style={styles.toolsRow}>
+          <Teleprompter
+            isRecording={phase === 'recording'}
+            isPaused={phase === 'paused'}
           />
-          <View style={styles.reviewActions}>
-            <Pressable onPress={discardRecording} style={styles.discardBtn}>
-              <Ionicons name="trash-outline" size={22} color={Colors.danger} />
-              <Text style={styles.discardText}>Discard</Text>
-            </Pressable>
-            <Pressable onPress={saveRecording} style={[styles.postBtn, isUploading && { opacity: 0.6 }]} disabled={isUploading}>
-              <Feather name={isUploading ? "loader" : "upload"} size={20} color={Colors.bg} />
-              <Text style={styles.postText}>{isUploading ? 'Uploading...' : 'Post'}</Text>
-            </Pressable>
-          </View>
+          <VibeSelector
+            selectedVibe={selectedVibe}
+            onSelect={setSelectedVibe}
+            isRecording={isActiveRecording}
+          />
         </View>
-      ) : (
-        <View style={styles.recordContainer}>
-          <View style={styles.toolsRow}>
-            <Teleprompter
-              isRecording={phase === 'recording'}
-              isPaused={phase === 'paused'}
-            />
-            <VibeSelector
-              selectedVibe={selectedVibe}
-              onSelect={setSelectedVibe}
-              isRecording={isActiveRecording}
-            />
+
+        <View style={styles.centerArea}>
+          {isActiveRecording && segmentCount > 1 && (
+            <View style={styles.segmentIndicator}>
+              <MaterialCommunityIcons name="layers-outline" size={14} color={Colors.accent} />
+              <Text style={styles.segmentText}>Segment {segmentCount}</Text>
+            </View>
+          )}
+
+          <View style={styles.waveformLive}>
+            {bars.map(i => (
+              <LiveBar key={i} index={i} isRecording={phase === 'recording'} />
+            ))}
           </View>
 
-          <View style={styles.centerArea}>
-            {isActiveRecording && segmentCount > 1 && (
-              <View style={styles.segmentIndicator}>
-                <MaterialCommunityIcons name="layers-outline" size={14} color={Colors.accent} />
-                <Text style={styles.segmentText}>Segment {segmentCount}</Text>
-              </View>
+          <Text style={styles.timer}>{formatDuration(recordingDuration)}</Text>
+          <Text style={styles.timerLabel}>
+            {phase === 'recording' ? 'Recording...' : phase === 'paused' ? 'Paused' : 'Tap to start'}
+          </Text>
+
+          <View style={styles.controlsRow}>
+            {isActiveRecording && (
+              <Pressable onPress={redoRecording} style={styles.secondaryBtn}>
+                <Ionicons name="refresh" size={24} color={Colors.danger} />
+              </Pressable>
             )}
 
-            <View style={styles.waveformLive}>
-              {segmentMarkers.length > 0 && phase === 'paused' && (
-                <SegmentDivider />
-              )}
-              {bars.map(i => (
-                <LiveBar key={i} index={i} isRecording={phase === 'recording'} />
-              ))}
-            </View>
-
-            <Text style={styles.timer}>{formatDuration(recordingDuration)}</Text>
-            <Text style={styles.timerLabel}>
-              {phase === 'recording' ? 'Recording...' : phase === 'paused' ? 'Paused' : 'Tap to start'}
-            </Text>
-
-            <View style={styles.controlsRow}>
-              {isActiveRecording && (
-                <Pressable onPress={redoRecording} style={styles.secondaryBtn}>
-                  <Ionicons name="refresh" size={24} color={Colors.danger} />
+            <View style={styles.recBtnContainer}>
+              <Animated.View style={[styles.recPulse, pulseStyle]} />
+              {phase === 'idle' ? (
+                <Pressable onPress={startRecording} style={styles.recBtn}>
+                  <Ionicons name="mic" size={32} color={Colors.bg} />
                 </Pressable>
-              )}
-
-              <View style={styles.recBtnContainer}>
-                <Animated.View style={[styles.recPulse, pulseStyle]} />
-                {phase === 'idle' ? (
-                  <Pressable onPress={startRecording} style={styles.recBtn}>
-                    <Ionicons name="mic" size={32} color={Colors.bg} />
-                  </Pressable>
-                ) : phase === 'recording' ? (
-                  <Pressable onPress={pauseRecording} style={[styles.recBtn, styles.recBtnActive]}>
-                    <Ionicons name="pause" size={28} color={Colors.bg} />
-                  </Pressable>
-                ) : (
-                  <Pressable onPress={resumeRecording} style={styles.recBtn}>
-                    <Ionicons name="mic" size={28} color={Colors.bg} />
-                  </Pressable>
-                )}
-              </View>
-
-              {isActiveRecording && (
-                <Pressable onPress={stopRecording} style={styles.secondaryBtn}>
-                  <View style={styles.stopIcon} />
+              ) : phase === 'recording' ? (
+                <Pressable onPress={pauseRecording} style={[styles.recBtn, styles.recBtnActive]}>
+                  <Ionicons name="pause" size={28} color={Colors.bg} />
+                </Pressable>
+              ) : (
+                <Pressable onPress={resumeRecording} style={styles.recBtn}>
+                  <Ionicons name="mic" size={28} color={Colors.bg} />
                 </Pressable>
               )}
             </View>
 
-            <Text style={styles.durationHint}>
-              {phase === 'recording'
-                ? `Max ${formatDuration(MAX_DURATION_MS)}`
-                : phase === 'paused'
-                  ? 'Tap mic to resume, square to finish'
-                  : `Min 15s / Max 5min`
-              }
-            </Text>
+            {isActiveRecording && (
+              <Pressable onPress={stopRecording} style={styles.secondaryBtn}>
+                <View style={styles.stopIcon} />
+              </Pressable>
+            )}
           </View>
+
+          <Text style={styles.durationHint}>
+            {phase === 'recording'
+              ? `Max ${formatDuration(MAX_DURATION_MS)}`
+              : phase === 'paused'
+                ? 'Tap mic to resume, square to finish'
+                : `Min 15s / Max 5min`
+            }
+          </Text>
         </View>
-      )}
+      </View>
     </View>
   );
 }
@@ -592,91 +579,46 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans_400Regular',
     marginTop: 16,
   },
-  reviewContainer: {
+  processingContainer: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 20,
-    alignItems: 'center',
+    paddingHorizontal: 40,
   },
-  reviewCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 20,
-    padding: 30,
+  processingCircleWrap: {
+    width: 120,
+    height: 120,
     alignItems: 'center',
-    gap: 8,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.15)',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
-  reviewDuration: {
+  processingPulse: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: Colors.accent,
+  },
+  processingCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  processingTitle: {
     color: Colors.text,
-    fontSize: 36,
+    fontSize: 20,
     fontFamily: 'DMSans_700Bold',
+    textAlign: 'center',
   },
-  reviewLabel: {
+  processingSubtitle: {
     color: Colors.textDim,
     fontSize: 14,
     fontFamily: 'DMSans_400Regular',
-  },
-  segmentBadge: {
-    color: Colors.accent,
-    fontSize: 12,
-    fontFamily: 'DMSans_600SemiBold',
-    backgroundColor: 'rgba(255, 215, 0, 0.08)',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginTop: 4,
-  },
-  titleInput: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    color: Colors.text,
-    fontSize: 16,
-    fontFamily: 'DMSans_400Regular',
-    width: '100%',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.1)',
-  },
-  reviewActions: {
-    flexDirection: 'row',
-    gap: 16,
-    width: '100%',
-    marginTop: 8,
-  },
-  discardBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.danger,
-  },
-  discardText: {
-    color: Colors.danger,
-    fontSize: 15,
-    fontFamily: 'DMSans_600SemiBold',
-  },
-  postBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: Colors.accent,
-  },
-  postText: {
-    color: Colors.bg,
-    fontSize: 15,
-    fontFamily: 'DMSans_700Bold',
+    textAlign: 'center',
   },
 });

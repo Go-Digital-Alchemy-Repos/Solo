@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { StyleSheet, View, Text, Pressable, Platform, PanResponder, LayoutChangeEvent } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Platform, PanResponder, LayoutChangeEvent, TextInput } from 'react-native';
 import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -14,8 +14,9 @@ const MIN_SELECTION_MS = 5000;
 interface WaveformTrimmerProps {
   audioUri: string;
   durationMs: number;
-  onConfirm: (trimStartMs: number, trimEndMs: number) => void;
-  onDiscard: () => void;
+  onCancel: () => void;
+  onPost: (title: string, trimStartMs: number, trimEndMs: number) => void;
+  isPosting: boolean;
   transcript?: { text: string; words: TranscriptWord[] } | null;
   segmentMarkers?: number[];
 }
@@ -54,7 +55,7 @@ function getWordsNearPosition(words: TranscriptWord[], positionSec: number, wind
   return nearby.map(w => w.word).join(' ');
 }
 
-export default function WaveformTrimmer({ audioUri, durationMs, onConfirm, onDiscard, transcript, segmentMarkers }: WaveformTrimmerProps) {
+export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost, isPosting, transcript, segmentMarkers }: WaveformTrimmerProps) {
   const [containerWidth, setContainerWidth] = useState(0);
   const trackWidth = containerWidth - HANDLE_WIDTH * 2;
 
@@ -62,6 +63,7 @@ export default function WaveformTrimmer({ audioUri, durationMs, onConfirm, onDis
   const [trimEndFrac, setTrimEndFrac] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackPos, setPlaybackPos] = useState(0);
+  const [title, setTitle] = useState('');
 
   const soundRef = useRef<Audio.Sound | null>(null);
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -101,12 +103,57 @@ export default function WaveformTrimmer({ audioUri, durationMs, onConfirm, onDis
       soundRef.current = null;
     }
     setIsPlaying(false);
-    setPlaybackPos(0);
   }, []);
+
+  const ensureSoundLoaded = useCallback(async (): Promise<Audio.Sound> => {
+    if (soundRef.current) {
+      try {
+        const status = await soundRef.current.getStatusAsync();
+        if (status.isLoaded) return soundRef.current;
+      } catch {}
+      try {
+        await soundRef.current.unloadAsync();
+      } catch {}
+    }
+    const { sound } = await Audio.Sound.createAsync(
+      { uri: audioUri },
+      { shouldPlay: false }
+    );
+    soundRef.current = sound;
+    return sound;
+  }, [audioUri]);
+
+  const seekToPosition = useCallback(async (posMs: number) => {
+    try {
+      const sound = await ensureSoundLoaded();
+      await sound.setPositionAsync(Math.round(posMs));
+      setPlaybackPos(posMs);
+      if (!isPlaying) {
+        await sound.playAsync();
+        setIsPlaying(true);
+        if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
+        playbackIntervalRef.current = setInterval(async () => {
+          if (!soundRef.current) return;
+          try {
+            const status = await soundRef.current.getStatusAsync();
+            if (status.isLoaded) {
+              const pos = status.positionMillis;
+              setPlaybackPos(pos);
+              if (pos >= trimEndFrac * durationMs || !status.isPlaying) {
+                await soundRef.current.setPositionAsync(Math.round(trimStartFrac * durationMs));
+                await soundRef.current.playAsync();
+              }
+            }
+          } catch {}
+        }, 80);
+      }
+    } catch (e) {
+      console.error('Seek failed:', e);
+    }
+  }, [ensureSoundLoaded, isPlaying, trimStartFrac, trimEndFrac, durationMs]);
 
   const startPreview = useCallback(async () => {
     await stopPreview();
-
     try {
       const { sound } = await Audio.Sound.createAsync(
         { uri: audioUri },
@@ -137,7 +184,11 @@ export default function WaveformTrimmer({ audioUri, durationMs, onConfirm, onDis
 
   useEffect(() => {
     return () => {
-      stopPreview();
+      if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
+      if (soundRef.current) {
+        soundRef.current.stopAsync().catch(() => {});
+        soundRef.current.unloadAsync().catch(() => {});
+      }
     };
   }, []);
 
@@ -191,6 +242,28 @@ export default function WaveformTrimmer({ audioUri, durationMs, onConfirm, onDis
     });
   }, [trackWidth, trimStartFrac, trimEndFrac, durationMs, triggerHaptic]);
 
+  const scrubResponder = useMemo(() => {
+    if (trackWidth <= 0) return null;
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 3,
+      onPanResponderGrant: (evt) => {
+        const touchX = evt.nativeEvent.locationX - HANDLE_WIDTH;
+        const frac = Math.max(0, Math.min(1, touchX / trackWidth));
+        const posMs = frac * durationMs;
+        seekToPosition(posMs);
+        triggerHaptic();
+      },
+      onPanResponderMove: (evt) => {
+        const touchX = evt.nativeEvent.locationX - HANDLE_WIDTH;
+        const frac = Math.max(0, Math.min(1, touchX / trackWidth));
+        const posMs = frac * durationMs;
+        seekToPosition(posMs);
+      },
+      onPanResponderRelease: () => {},
+    });
+  }, [trackWidth, durationMs, seekToPosition, triggerHaptic]);
+
   const playbackFrac = durationMs > 0 ? playbackPos / durationMs : 0;
   const playbackSec = playbackPos / 1000;
 
@@ -201,119 +274,134 @@ export default function WaveformTrimmer({ audioUri, durationMs, onConfirm, onDis
   }, [transcript, playbackSec, isPlaying]);
 
   const bubbleLeftPx = HANDLE_WIDTH + playbackFrac * trackWidth;
+  const canPost = title.trim().length > 0 && selectionMs >= MIN_SELECTION_MS && !isPosting;
+
+  const handlePost = useCallback(() => {
+    if (!canPost) return;
+    stopPreview();
+    onPost(title.trim(), trimStartMs, trimEndMs);
+  }, [canPost, stopPreview, onPost, title, trimStartMs, trimEndMs]);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>Edit & Preview</Text>
-      <Text style={styles.subheading}>Drag handles to trim, tap play to preview</Text>
+      <View style={styles.header}>
+        <Pressable onPress={() => { stopPreview(); onCancel(); }} style={styles.cancelBtn} hitSlop={12}>
+          <Text style={styles.cancelText}>Cancel</Text>
+        </Pressable>
+        <Text style={styles.headerTitle}>Edit</Text>
+        <Pressable
+          onPress={handlePost}
+          style={[styles.postBtn, !canPost && styles.postBtnDisabled]}
+          disabled={!canPost}
+          hitSlop={12}
+        >
+          <Text style={[styles.postBtnText, !canPost && styles.postBtnTextDisabled]}>Post</Text>
+        </Pressable>
+      </View>
+
+      <TextInput
+        style={styles.titleInput}
+        placeholder="Title your Solo..."
+        placeholderTextColor={Colors.textMuted}
+        value={title}
+        onChangeText={setTitle}
+        maxLength={80}
+        returnKeyType="done"
+      />
 
       <View style={styles.timeRow}>
         <Text style={styles.timeLabel}>{formatTime(trimStartMs)}</Text>
-        <Text style={styles.selectionLabel}>Selected: {formatTime(selectionMs)}</Text>
+        <Text style={styles.selectionLabel}>{formatTime(selectionMs)}</Text>
         <Text style={styles.timeLabel}>{formatTime(trimEndMs)}</Text>
       </View>
 
-      {isPlaying && transcriptBubbleText.length > 0 && (
+      {isPlaying && transcriptBubbleText.length > 0 && containerWidth > 0 && (
         <View style={[styles.transcriptBubble, {
           left: Math.max(20, Math.min(containerWidth - 180, bubbleLeftPx - 80)),
         }]}>
           <Text style={styles.transcriptBubbleText} numberOfLines={2}>
             {transcriptBubbleText}
           </Text>
-          <View style={[styles.bubbleArrow, {
-            left: Math.max(10, Math.min(140, bubbleLeftPx - Math.max(20, Math.min(containerWidth - 180, bubbleLeftPx - 80)) + 0)),
-          }]} />
         </View>
       )}
 
-      <View style={styles.trimmerContainer} onLayout={onLayout}>
-        {containerWidth > 0 && (
-          <>
-            <View style={[styles.dimOverlay, { left: 0, width: HANDLE_WIDTH + trimStartFrac * trackWidth }]} />
-            <View style={[styles.dimOverlay, { right: 0, width: HANDLE_WIDTH + (1 - trimEndFrac) * trackWidth }]} />
+      <View style={styles.trimmerOuter}>
+        <View style={styles.trimmerContainer} onLayout={onLayout}>
+          {containerWidth > 0 && (
+            <>
+              <View style={[styles.dimOverlay, { left: 0, width: HANDLE_WIDTH + trimStartFrac * trackWidth }]} />
+              <View style={[styles.dimOverlay, { right: 0, width: HANDLE_WIDTH + (1 - trimEndFrac) * trackWidth }]} />
 
-            <View
-              style={[styles.handle, styles.handleLeft, { left: trimStartFrac * trackWidth }]}
-              {...(leftHandleResponder?.panHandlers || {})}
-            >
-              <View style={styles.handleGrip} />
-              <View style={styles.handleGrip} />
-              <View style={styles.handleGrip} />
-            </View>
+              <View
+                style={[styles.handle, styles.handleLeft, { left: trimStartFrac * trackWidth }]}
+                {...(leftHandleResponder?.panHandlers || {})}
+              >
+                <View style={styles.handleGrip} />
+                <View style={styles.handleGrip} />
+                <View style={styles.handleGrip} />
+              </View>
 
-            <View
-              style={[styles.handle, styles.handleRight, { left: HANDLE_WIDTH + trimEndFrac * trackWidth }]}
-              {...(rightHandleResponder?.panHandlers || {})}
-            >
-              <View style={styles.handleGrip} />
-              <View style={styles.handleGrip} />
-              <View style={styles.handleGrip} />
-            </View>
+              <View
+                style={[styles.handle, styles.handleRight, { left: HANDLE_WIDTH + trimEndFrac * trackWidth }]}
+                {...(rightHandleResponder?.panHandlers || {})}
+              >
+                <View style={styles.handleGrip} />
+                <View style={styles.handleGrip} />
+                <View style={styles.handleGrip} />
+              </View>
 
-            <View style={[styles.selectionBorder, {
-              left: trimStartFrac * trackWidth + HANDLE_WIDTH,
-              width: (trimEndFrac - trimStartFrac) * trackWidth,
-            }]} />
+              <View style={[styles.selectionBorder, {
+                left: trimStartFrac * trackWidth + HANDLE_WIDTH,
+                width: (trimEndFrac - trimStartFrac) * trackWidth,
+              }]} />
 
-            <View style={styles.waveformContainer}>
-              {waveformData.map((amp, i) => {
-                const barFrac = i / BAR_COUNT;
-                const isInSelection = barFrac >= trimStartFrac && barFrac <= trimEndFrac;
-                const isAtPlayback = isPlaying && Math.abs(barFrac - playbackFrac) < (1.5 / BAR_COUNT);
-                const isSegmentBoundary = segmentMarkers && segmentMarkers.some(
-                  marker => Math.abs(barFrac - marker / durationMs) < (1.2 / BAR_COUNT)
-                );
-                return (
-                  <View
-                    key={i}
-                    style={[
-                      styles.bar,
-                      {
-                        height: 8 + amp * 72,
-                        backgroundColor: isSegmentBoundary
-                          ? 'rgba(255, 68, 68, 0.6)'
-                          : isAtPlayback
-                            ? '#FFFFFF'
-                            : isInSelection
-                              ? Colors.accent
-                              : 'rgba(255, 215, 0, 0.2)',
-                      },
-                    ]}
-                  />
-                );
-              })}
-            </View>
+              <View
+                style={styles.waveformContainer}
+                {...(scrubResponder?.panHandlers || {})}
+              >
+                {waveformData.map((amp, i) => {
+                  const barFrac = i / BAR_COUNT;
+                  const isInSelection = barFrac >= trimStartFrac && barFrac <= trimEndFrac;
+                  const isAtPlayback = isPlaying && Math.abs(barFrac - playbackFrac) < (1.5 / BAR_COUNT);
+                  const isSegmentBoundary = segmentMarkers && segmentMarkers.some(
+                    marker => Math.abs(barFrac - marker / durationMs) < (1.2 / BAR_COUNT)
+                  );
+                  return (
+                    <View
+                      key={i}
+                      style={[
+                        styles.bar,
+                        {
+                          height: 8 + amp * 72,
+                          backgroundColor: isSegmentBoundary
+                            ? 'rgba(255, 68, 68, 0.6)'
+                            : isAtPlayback
+                              ? '#FFFFFF'
+                              : isInSelection
+                                ? Colors.accent
+                                : 'rgba(255, 215, 0, 0.2)',
+                        },
+                      ]}
+                    />
+                  );
+                })}
+              </View>
 
-            {isPlaying && playbackFrac >= trimStartFrac && playbackFrac <= trimEndFrac && (
-              <View style={[styles.playhead, { left: HANDLE_WIDTH + playbackFrac * trackWidth }]} />
-            )}
-          </>
-        )}
+              {playbackFrac > 0 && (
+                <View style={[styles.playhead, { left: HANDLE_WIDTH + playbackFrac * trackWidth }]} />
+              )}
+            </>
+          )}
+        </View>
+        <Text style={styles.scrubHint}>Drag across waveform to scrub</Text>
       </View>
 
       <View style={styles.controls}>
         <Pressable
           onPress={isPlaying ? stopPreview : startPreview}
-          style={styles.playBtn}
+          style={styles.playPauseBtn}
         >
           <Ionicons name={isPlaying ? "pause" : "play"} size={28} color={Colors.bg} />
-        </Pressable>
-      </View>
-
-      <View style={styles.actions}>
-        <Pressable onPress={onDiscard} style={styles.discardBtn}>
-          <Ionicons name="arrow-back" size={20} color={Colors.textDim} />
-          <Text style={styles.discardText}>Re-record</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => {
-            stopPreview();
-            onConfirm(trimStartMs, trimEndMs);
-          }}
-          style={styles.confirmBtn}
-        >
-          <Ionicons name="checkmark" size={20} color={Colors.bg} />
-          <Text style={styles.confirmText}>Confirm</Text>
         </Pressable>
       </View>
     </View>
@@ -323,44 +411,83 @@ export default function WaveformTrimmer({ audioUri, durationMs, onConfirm, onDis
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    gap: 12,
+    backgroundColor: Colors.bg,
   },
-  heading: {
-    color: Colors.text,
-    fontSize: 22,
-    fontFamily: 'DMSans_700Bold',
-    textAlign: 'center',
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
   },
-  subheading: {
+  cancelBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  cancelText: {
     color: Colors.textDim,
-    fontSize: 13,
+    fontSize: 16,
+    fontFamily: 'DMSans_500Medium',
+  },
+  headerTitle: {
+    color: Colors.text,
+    fontSize: 17,
+    fontFamily: 'DMSans_700Bold',
+  },
+  postBtn: {
+    backgroundColor: Colors.accent,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  postBtnDisabled: {
+    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+  },
+  postBtnText: {
+    color: Colors.bg,
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+  },
+  postBtnTextDisabled: {
+    color: 'rgba(0, 0, 0, 0.4)',
+  },
+  titleInput: {
+    backgroundColor: Colors.surface,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    color: Colors.text,
+    fontSize: 16,
     fontFamily: 'DMSans_400Regular',
-    textAlign: 'center',
-    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.1)',
   },
   timeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 20,
+    marginTop: 16,
   },
   timeLabel: {
-    color: Colors.textDim,
+    color: Colors.textMuted,
     fontSize: 13,
     fontFamily: 'DMSans_500Medium',
     fontVariant: ['tabular-nums'],
   },
   selectionLabel: {
     color: Colors.accent,
-    fontSize: 14,
-    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
     fontVariant: ['tabular-nums'],
   },
   transcriptBubble: {
     position: 'absolute',
-    top: 110,
+    top: 155,
     width: 160,
     backgroundColor: 'rgba(30, 30, 30, 0.95)',
     borderRadius: 10,
@@ -377,19 +504,13 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     textAlign: 'center',
   },
-  bubbleArrow: {
-    position: 'absolute',
-    bottom: -5,
-    width: 10,
-    height: 10,
-    backgroundColor: 'rgba(30, 30, 30, 0.95)',
-    transform: [{ rotate: '45deg' }],
-    borderRightWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.25)',
+  trimmerOuter: {
+    paddingHorizontal: 16,
+    marginTop: 12,
+    gap: 6,
   },
   trimmerContainer: {
-    height: 120,
+    height: 130,
     backgroundColor: Colors.surface,
     borderRadius: 16,
     overflow: 'hidden',
@@ -460,53 +581,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     zIndex: 8,
   },
+  scrubHint: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    fontFamily: 'DMSans_400Regular',
+    textAlign: 'center',
+  },
   controls: {
     alignItems: 'center',
-    paddingVertical: 4,
-  },
-  playBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: 16,
     marginTop: 'auto',
-    paddingBottom: 20,
+    paddingBottom: 24,
   },
-  discardBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  discardText: {
-    color: Colors.textDim,
-    fontSize: 15,
-    fontFamily: 'DMSans_600SemiBold',
-  },
-  confirmBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
+  playPauseBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: Colors.accent,
-  },
-  confirmText: {
-    color: Colors.bg,
-    fontSize: 15,
-    fontFamily: 'DMSans_700Bold',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
