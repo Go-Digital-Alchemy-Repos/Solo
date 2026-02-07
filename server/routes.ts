@@ -1,14 +1,19 @@
 import type { Express } from "express";
 import { createServer, type Server } from "node:http";
 import multer from "multer";
-import { Client } from "@replit/object-storage";
 import { db } from "./db";
 import { solos } from "@shared/schema";
 import { desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import * as fs from "fs";
+import * as path from "path";
+
+const UPLOADS_DIR = path.resolve(process.cwd(), "uploads", "solos");
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
-const objectStorage = new Client();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/solos", upload.single("audio"), async (req, res) => {
@@ -24,13 +29,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const fileId = randomUUID();
-      const objectKey = `solos/${fileId}.m4a`;
+      const fileName = `${fileId}.m4a`;
+      const filePath = path.join(UPLOADS_DIR, fileName);
 
-      const uploadResult = await objectStorage.uploadFromBytes(objectKey, file.buffer);
-      if (!uploadResult.ok) {
-        console.error("Object storage upload failed:", uploadResult.error);
-        return res.status(500).json({ error: "Failed to upload audio file" });
-      }
+      fs.writeFileSync(filePath, file.buffer);
 
       const audioUrl = `/api/audio/${fileId}`;
 
@@ -68,19 +70,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/audio/:fileId", async (req, res) => {
+  app.get("/api/audio/:fileId", (req, res) => {
     try {
       const { fileId } = req.params;
-      const objectKey = `solos/${fileId}.m4a`;
+      const filePath = path.join(UPLOADS_DIR, `${fileId}.m4a`);
 
-      const result = await objectStorage.downloadAsBytes(objectKey);
-      if (!result.ok) {
+      if (!fs.existsSync(filePath)) {
         return res.status(404).json({ error: "Audio not found" });
       }
+
+      const stat = fs.statSync(filePath);
       res.set("Content-Type", "audio/mp4");
+      res.set("Content-Length", stat.size.toString());
       res.set("Accept-Ranges", "bytes");
       res.set("Cache-Control", "public, max-age=31536000");
-      return res.send(Buffer.from(result.value));
+
+      const stream = fs.createReadStream(filePath);
+      stream.pipe(res);
     } catch (error) {
       console.error("Error streaming audio:", error);
       return res.status(404).json({ error: "Audio not found" });

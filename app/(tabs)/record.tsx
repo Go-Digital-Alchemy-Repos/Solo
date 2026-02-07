@@ -56,7 +56,7 @@ function LiveBar({ index, isRecording }: { index: number; isRecording: boolean }
 
 export default function RecordScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, addPost } = useData();
+  const { currentUser, uploadAndPost, isUploading } = useData();
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
@@ -161,7 +161,7 @@ export default function RecordScreen() {
     setTitle('');
   }, []);
 
-  const saveRecording = useCallback(() => {
+  const saveRecording = useCallback(async () => {
     if (!recordedUri || !title.trim()) {
       Alert.alert('Missing Title', 'Please add a title for your recording.');
       return;
@@ -170,25 +170,24 @@ export default function RecordScreen() {
       Alert.alert('Too Short', 'Recording must be at least 15 seconds.');
       return;
     }
-    addPost({
-      userId: currentUser.id,
-      username: currentUser.username,
-      displayName: currentUser.displayName,
-      avatarUri: currentUser.avatarUri,
-      title: title.trim(),
-      audioUri: recordedUri,
-      durationMs: recordingDuration,
-      teaserDurationMs: Math.min(60000, recordingDuration),
-      isRSS: false,
-    });
-    setRecordedUri(null);
-    setRecordingDuration(0);
-    setTitle('');
-    if (Platform.OS !== 'web') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    try {
+      await uploadAndPost({
+        audioUri: recordedUri,
+        title: title.trim(),
+        durationMs: recordingDuration,
+      });
+      setRecordedUri(null);
+      setRecordingDuration(0);
+      setTitle('');
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      Alert.alert('Posted!', 'Your sound has been shared.');
+    } catch (e) {
+      console.error('Failed to upload:', e);
+      Alert.alert('Upload Failed', 'Could not upload your recording. Please try again.');
     }
-    Alert.alert('Posted!', 'Your sound has been shared.');
-  }, [recordedUri, title, recordingDuration, addPost, currentUser]);
+  }, [recordedUri, title, recordingDuration, uploadAndPost]);
 
   const formatDuration = (ms: number) => {
     const totalSec = Math.floor(ms / 1000);
@@ -244,9 +243,9 @@ export default function RecordScreen() {
               <Ionicons name="trash-outline" size={22} color={Colors.danger} />
               <Text style={styles.discardText}>Discard</Text>
             </Pressable>
-            <Pressable onPress={saveRecording} style={styles.postBtn}>
-              <Feather name="upload" size={20} color={Colors.bg} />
-              <Text style={styles.postText}>Post</Text>
+            <Pressable onPress={saveRecording} style={[styles.postBtn, isUploading && { opacity: 0.6 }]} disabled={isUploading}>
+              <Feather name={isUploading ? "loader" : "upload"} size={20} color={Colors.bg} />
+              <Text style={styles.postText}>{isUploading ? 'Uploading...' : 'Post'}</Text>
             </Pressable>
           </View>
         </View>

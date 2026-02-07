@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { getApiUrl } from './query-client';
+import { Platform } from 'react-native';
 
 export interface UserProfile {
   id: string;
@@ -44,6 +47,12 @@ interface DataContextValue {
   updateProfile: (updates: Partial<UserProfile>) => void;
   posts: AudioPost[];
   addPost: (post: Omit<AudioPost, 'id' | 'likes' | 'liked' | 'comments' | 'createdAt' | 'waveformData'>) => void;
+  uploadAndPost: (params: {
+    audioUri: string;
+    title: string;
+    durationMs: number;
+    tags?: string[];
+  }) => Promise<void>;
   toggleLike: (postId: string) => void;
   addComment: (postId: string, text: string) => void;
   following: Set<string>;
@@ -51,6 +60,8 @@ interface DataContextValue {
   searchPosts: (query: string) => AudioPost[];
   searchUsers: (query: string) => UserProfile[];
   allUsers: UserProfile[];
+  isUploading: boolean;
+  refreshFeed: () => void;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -71,57 +82,39 @@ const SAMPLE_USERS: UserProfile[] = [
   { id: 'user_5', username: 'voicenotes', displayName: 'Luna Park', bio: 'Storytelling through sound', avatarUri: null, followerCount: 6700, followingCount: 198 },
 ];
 
-const DEMO_AUDIO = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+interface ServerSolo {
+  id: string;
+  username: string;
+  audioUrl: string;
+  timestamp: string;
+  tags: string[] | null;
+  avatarUrl: string | null;
+  title: string;
+  durationMs: number;
+  displayName: string | null;
+}
 
-function createSamplePosts(): AudioPost[] {
-  return [
-    {
-      id: 'post_1', userId: 'user_1', username: 'melodyjane', displayName: 'Melody Jane', avatarUri: null,
-      title: 'Morning acoustic session', audioUri: DEMO_AUDIO, durationMs: 180000, teaserDurationMs: 60000,
-      isRSS: false, likes: 234, liked: false,
-      comments: [
-        { id: 'c1', userId: 'user_2', username: 'djthunder', avatarUri: null, text: 'This is incredible!', createdAt: Date.now() - 3600000 },
-        { id: 'c2', userId: 'user_4', username: 'acousticvibes', avatarUri: null, text: 'Love the chord progression', createdAt: Date.now() - 1800000 },
-      ],
-      createdAt: Date.now() - 7200000, waveformData: generateWaveform(),
-    },
-    {
-      id: 'post_2', userId: 'user_2', username: 'djthunder', displayName: 'DJ Thunder', avatarUri: null,
-      title: 'New bass drop preview', audioUri: DEMO_AUDIO, durationMs: 45000, teaserDurationMs: 45000,
-      isRSS: false, likes: 892, liked: false,
-      comments: [
-        { id: 'c3', userId: 'user_5', username: 'voicenotes', avatarUri: null, text: 'The bass on this is insane', createdAt: Date.now() - 900000 },
-      ],
-      createdAt: Date.now() - 14400000, waveformData: generateWaveform(),
-    },
-    {
-      id: 'post_3', userId: 'user_3', username: 'podcastpro', displayName: 'Sarah Chen', avatarUri: null,
-      title: 'Tech Talk: The Future of AI', audioUri: DEMO_AUDIO, durationMs: 300000, teaserDurationMs: 60000,
-      isRSS: true, likes: 1543, liked: false,
-      comments: [
-        { id: 'c4', userId: 'user_1', username: 'melodyjane', avatarUri: null, text: 'Such a great episode', createdAt: Date.now() - 600000 },
-        { id: 'c5', userId: 'user_4', username: 'acousticvibes', avatarUri: null, text: 'Been waiting for this one!', createdAt: Date.now() - 300000 },
-        { id: 'c6', userId: 'user_2', username: 'djthunder', avatarUri: null, text: 'Mind blown by the AI discussion', createdAt: Date.now() - 120000 },
-      ],
-      createdAt: Date.now() - 28800000, waveformData: generateWaveform(),
-    },
-    {
-      id: 'post_4', userId: 'user_4', username: 'acousticvibes', displayName: 'Marcus Bell', avatarUri: null,
-      title: 'Fingerpicking practice loop', audioUri: DEMO_AUDIO, durationMs: 120000, teaserDurationMs: 60000,
-      isRSS: false, likes: 456, liked: false,
-      comments: [],
-      createdAt: Date.now() - 43200000, waveformData: generateWaveform(),
-    },
-    {
-      id: 'post_5', userId: 'user_5', username: 'voicenotes', displayName: 'Luna Park', avatarUri: null,
-      title: 'Midnight story: The Last Train', audioUri: DEMO_AUDIO, durationMs: 240000, teaserDurationMs: 60000,
-      isRSS: true, likes: 2100, liked: false,
-      comments: [
-        { id: 'c7', userId: 'user_3', username: 'podcastpro', avatarUri: null, text: 'Your storytelling is unmatched', createdAt: Date.now() - 60000 },
-      ],
-      createdAt: Date.now() - 86400000, waveformData: generateWaveform(),
-    },
-  ];
+function serverSoloToPost(solo: ServerSolo): AudioPost {
+  const baseUrl = getApiUrl();
+  const audioUri = solo.audioUrl.startsWith('/') ? `${baseUrl}${solo.audioUrl.slice(1)}` : solo.audioUrl;
+
+  return {
+    id: solo.id,
+    userId: solo.username,
+    username: solo.username,
+    displayName: solo.displayName || solo.username,
+    avatarUri: solo.avatarUrl,
+    title: solo.title,
+    audioUri,
+    durationMs: solo.durationMs,
+    teaserDurationMs: Math.min(60000, solo.durationMs),
+    isRSS: false,
+    likes: 0,
+    liked: false,
+    comments: [],
+    createdAt: new Date(solo.timestamp).getTime(),
+    waveformData: generateWaveform(),
+  };
 }
 
 const DEFAULT_USER: UserProfile = {
@@ -136,8 +129,18 @@ const DEFAULT_USER: UserProfile = {
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<UserProfile>(DEFAULT_USER);
-  const [posts, setPosts] = useState<AudioPost[]>(createSamplePosts());
+  const [localLikes, setLocalLikes] = useState<Set<string>>(new Set());
+  const [localComments, setLocalComments] = useState<Record<string, Comment[]>>({});
   const [following, setFollowing] = useState<Set<string>>(new Set());
+  const [isUploading, setIsUploading] = useState(false);
+  const queryClient = useQueryClient();
+
+  const { data: serverSolos = [] } = useQuery<ServerSolo[]>({
+    queryKey: ['/api/solos'],
+    refetchInterval: 10000,
+    staleTime: 5000,
+    refetchOnWindowFocus: true,
+  });
 
   useEffect(() => {
     AsyncStorage.getItem('solo_profile').then(data => {
@@ -145,6 +148,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
     AsyncStorage.getItem('solo_following').then(data => {
       if (data) setFollowing(new Set(JSON.parse(data)));
+    });
+    AsyncStorage.getItem('solo_likes').then(data => {
+      if (data) setLocalLikes(new Set(JSON.parse(data)));
     });
   }, []);
 
@@ -156,29 +162,88 @@ export function DataProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem('solo_following', JSON.stringify([...following]));
   }, [following]);
 
+  useEffect(() => {
+    AsyncStorage.setItem('solo_likes', JSON.stringify([...localLikes]));
+  }, [localLikes]);
+
+  const posts = useMemo(() => {
+    return serverSolos.map(solo => {
+      const post = serverSoloToPost(solo);
+      post.liked = localLikes.has(post.id);
+      post.likes = localLikes.has(post.id) ? 1 : 0;
+      post.comments = localComments[post.id] || [];
+      return post;
+    });
+  }, [serverSolos, localLikes, localComments]);
+
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {
     setCurrentUser(prev => ({ ...prev, ...updates }));
   }, []);
 
   const addPost = useCallback((post: Omit<AudioPost, 'id' | 'likes' | 'liked' | 'comments' | 'createdAt' | 'waveformData'>) => {
-    const newPost: AudioPost = {
-      ...post,
-      id: Crypto.randomUUID(),
-      likes: 0,
-      liked: false,
-      comments: [],
-      createdAt: Date.now(),
-      waveformData: generateWaveform(),
-    };
-    setPosts(prev => [newPost, ...prev]);
+    // kept for compatibility but uploadAndPost is preferred
   }, []);
 
+  const uploadAndPost = useCallback(async (params: {
+    audioUri: string;
+    title: string;
+    durationMs: number;
+    tags?: string[];
+  }) => {
+    setIsUploading(true);
+    try {
+      const baseUrl = getApiUrl();
+      const formData = new FormData();
+
+      if (Platform.OS === 'web') {
+        const response = await globalThis.fetch(params.audioUri);
+        const blob = await response.blob();
+        formData.append('audio', blob, 'recording.m4a');
+      } else {
+        const { File } = await import('expo-file-system');
+        const file = new File(params.audioUri);
+        formData.append('audio', file as any);
+      }
+
+      formData.append('username', currentUser.username);
+      formData.append('displayName', currentUser.displayName);
+      formData.append('title', params.title);
+      formData.append('durationMs', params.durationMs.toString());
+      if (params.tags) {
+        formData.append('tags', JSON.stringify(params.tags));
+      }
+      if (currentUser.avatarUri) {
+        formData.append('avatarUrl', currentUser.avatarUri);
+      }
+
+      const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
+
+      const res = await fetchFn(new URL('/api/solos', baseUrl).toString(), {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Upload failed: ${errorText}`);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['/api/solos'] });
+    } finally {
+      setIsUploading(false);
+    }
+  }, [currentUser, queryClient]);
+
   const toggleLike = useCallback((postId: string) => {
-    setPosts(prev => prev.map(p =>
-      p.id === postId
-        ? { ...p, liked: !p.liked, likes: p.liked ? p.likes - 1 : p.likes + 1 }
-        : p
-    ));
+    setLocalLikes(prev => {
+      const next = new Set(prev);
+      if (next.has(postId)) {
+        next.delete(postId);
+      } else {
+        next.add(postId);
+      }
+      return next;
+    });
   }, []);
 
   const addComment = useCallback((postId: string, text: string) => {
@@ -190,9 +255,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       text,
       createdAt: Date.now(),
     };
-    setPosts(prev => prev.map(p =>
-      p.id === postId ? { ...p, comments: [...p.comments, comment] } : p
-    ));
+    setLocalComments(prev => ({
+      ...prev,
+      [postId]: [...(prev[postId] || []), comment],
+    }));
   }, [currentUser]);
 
   const toggleFollow = useCallback((userId: string) => {
@@ -224,11 +290,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  const refreshFeed = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['/api/solos'] });
+  }, [queryClient]);
+
   const value = useMemo(() => ({
     currentUser,
     updateProfile,
     posts,
     addPost,
+    uploadAndPost,
     toggleLike,
     addComment,
     following,
@@ -236,7 +307,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     searchPosts,
     searchUsers,
     allUsers: SAMPLE_USERS,
-  }), [currentUser, updateProfile, posts, addPost, toggleLike, addComment, following, toggleFollow, searchPosts, searchUsers]);
+    isUploading,
+    refreshFeed,
+  }), [currentUser, updateProfile, posts, addPost, uploadAndPost, toggleLike, addComment, following, toggleFollow, searchPosts, searchUsers, isUploading, refreshFeed]);
 
   return (
     <DataContext.Provider value={value}>
