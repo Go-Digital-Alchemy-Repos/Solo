@@ -1,29 +1,99 @@
-import React, { useCallback, useState } from 'react';
-import { StyleSheet, View, Text, Pressable, FlatList, Platform, Alert, TextInput as RNTextInput, ActivityIndicator } from 'react-native';
+import React, { useCallback, useState, useMemo } from 'react';
+import { StyleSheet, View, Text, Pressable, FlatList, Platform, Alert, TextInput as RNTextInput, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { Ionicons, Feather } from '@expo/vector-icons';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import Avatar from '@/components/Avatar';
 import SoundCard from '@/components/SoundCard';
 import SoloHeader from '@/components/SoloHeader';
-import { useData } from '@/lib/data-context';
+import { useData, AudioPost } from '@/lib/data-context';
 import { useAuth } from '@/lib/auth-context';
 import { getApiUrl } from '@/lib/query-client';
 
+interface ServerSolo {
+  id: string;
+  userId: string;
+  username: string;
+  audioUrl: string;
+  timestamp: string;
+  tags: string[] | null;
+  avatarUrl: string | null;
+  title: string;
+  durationMs: number;
+  displayName: string | null;
+}
+
+function generateWaveform(length: number = 40): number[] {
+  const data: number[] = [];
+  for (let i = 0; i < length; i++) {
+    data.push(0.15 + Math.random() * 0.85);
+  }
+  return data;
+}
+
+function serverSoloToPost(solo: ServerSolo): AudioPost {
+  const baseUrl = getApiUrl();
+  const audioUri = solo.audioUrl.startsWith('/') ? `${baseUrl}${solo.audioUrl.slice(1)}` : solo.audioUrl;
+  const avatarUri = solo.avatarUrl?.startsWith('/') ? `${baseUrl}${solo.avatarUrl.slice(1)}` : solo.avatarUrl;
+
+  return {
+    id: solo.id,
+    userId: solo.userId || solo.username,
+    username: solo.username,
+    displayName: solo.displayName || solo.username,
+    avatarUri: avatarUri || null,
+    title: solo.title,
+    audioUri,
+    durationMs: solo.durationMs,
+    teaserDurationMs: Math.min(60000, solo.durationMs),
+    isRSS: false,
+    likes: 0,
+    liked: false,
+    comments: [],
+    createdAt: new Date(solo.timestamp).getTime(),
+    waveformData: generateWaveform(),
+  };
+}
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { currentUser, posts } = useData();
+  const { currentUser } = useData();
   const { user: authUser, logout, updateUser } = useAuth();
+  const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [editUsername, setEditUsername] = useState(currentUser.username);
   const [editBio, setEditBio] = useState(currentUser.bio);
   const [editAvatarUri, setEditAvatarUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
-  const myPosts = posts.filter(p => p.userId === currentUser.id);
+  const userId = authUser?.id;
+
+  const { data: serverSolos = [], isLoading, refetch, isRefetching } = useQuery<ServerSolo[]>({
+    queryKey: ['/api/solos/user', userId],
+    queryFn: async () => {
+      if (!userId) return [];
+      const baseUrl = getApiUrl();
+      const res = await fetch(new URL(`/api/solos/user/${userId}`, baseUrl).toString());
+      if (!res.ok) throw new Error('Failed to fetch solos');
+      return res.json();
+    },
+    enabled: !!userId,
+    staleTime: 5000,
+  });
+
+  const myPosts = useMemo(() => serverSolos.map(serverSoloToPost), [serverSolos]);
+  const postCount = myPosts.length;
+
+  const onRefresh = useCallback(async () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    await refetch();
+    queryClient.invalidateQueries({ queryKey: ['/api/solos'] });
+  }, [refetch, queryClient]);
 
   const pickImage = useCallback(async () => {
     if (Platform.OS !== 'web') {
@@ -209,7 +279,7 @@ export default function ProfileScreen() {
 
       <View style={styles.statsRow}>
         <View style={styles.stat}>
-          <Text style={styles.statNumber}>{myPosts.length}</Text>
+          <Text style={styles.statNumber} testID="post-count">{postCount}</Text>
           <Text style={styles.statLabel}>Sounds</Text>
         </View>
         <View style={styles.statDivider} />
@@ -242,9 +312,7 @@ export default function ProfileScreen() {
         </View>
       )}
 
-      {myPosts.length > 0 && (
-        <Text style={styles.sectionTitle}>Your Sounds</Text>
-      )}
+      <Text style={styles.sectionTitle}>My Solos</Text>
     </View>
   );
 
@@ -260,12 +328,27 @@ export default function ProfileScreen() {
           paddingBottom: Platform.OS === 'web' ? 84 : 100,
         }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={onRefresh}
+            tintColor={Colors.accent}
+            colors={[Colors.accent]}
+            progressBackgroundColor={Colors.surface}
+          />
+        }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="musical-notes-outline" size={48} color={Colors.textMuted} />
-            <Text style={styles.emptyText}>No sounds recorded yet</Text>
-            <Text style={styles.emptySubtext}>Head to the Record tab to create your first sound</Text>
-          </View>
+          isLoading ? (
+            <View style={styles.empty}>
+              <ActivityIndicator color={Colors.accent} size="large" />
+            </View>
+          ) : (
+            <View style={styles.empty}>
+              <Ionicons name="musical-notes-outline" size={48} color={Colors.textMuted} />
+              <Text style={styles.emptyText}>No sounds recorded yet</Text>
+              <Text style={styles.emptySubtext}>Head to the Record tab to create your first sound</Text>
+            </View>
+          )
         }
       />
     </View>

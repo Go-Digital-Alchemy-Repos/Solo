@@ -273,6 +273,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/solos/user/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const userSolos = await db
+        .select()
+        .from(solos)
+        .where(eq(solos.userId, userId))
+        .orderBy(desc(solos.timestamp));
+
+      return res.json(userSolos);
+    } catch (error) {
+      console.error("Error fetching user solos:", error);
+      return res.status(500).json({ error: "Failed to fetch user solos" });
+    }
+  });
+
   app.get("/api/audio/:fileId", (req, res) => {
     try {
       const { fileId } = req.params;
