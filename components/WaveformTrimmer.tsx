@@ -49,6 +49,8 @@ export default function WaveformTrimmer({ audioUri, durationMs, onConfirm, onDis
   const soundRef = useRef<Audio.Sound | null>(null);
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastHapticRef = useRef(0);
+  const startFracOnGrant = useRef(0);
+  const endFracOnGrant = useRef(1);
 
   const waveformData = useMemo(() => generateWaveformData(BAR_COUNT, audioUri.length), [audioUri]);
 
@@ -128,12 +130,12 @@ export default function WaveformTrimmer({ audioUri, durationMs, onConfirm, onDis
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        startFracOnGrant.current = trimStartFrac;
         triggerHaptic();
       },
       onPanResponderMove: (_, gestureState) => {
-        const dx = gestureState.dx;
-        const fracDelta = dx / trackWidth;
-        let newStart = Math.max(0, trimStartFrac + fracDelta);
+        const fracDelta = gestureState.dx / trackWidth;
+        let newStart = Math.max(0, startFracOnGrant.current + fracDelta);
         const maxStart = trimEndFrac - (MIN_SELECTION_MS / durationMs);
         newStart = Math.min(newStart, maxStart);
         setTrimStartFrac(newStart);
@@ -153,12 +155,12 @@ export default function WaveformTrimmer({ audioUri, durationMs, onConfirm, onDis
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        endFracOnGrant.current = trimEndFrac;
         triggerHaptic();
       },
       onPanResponderMove: (_, gestureState) => {
-        const dx = gestureState.dx;
-        const fracDelta = dx / trackWidth;
-        let newEnd = Math.min(1, trimEndFrac + fracDelta);
+        const fracDelta = gestureState.dx / trackWidth;
+        let newEnd = Math.min(1, endFracOnGrant.current + fracDelta);
         const minEnd = trimStartFrac + (MIN_SELECTION_MS / durationMs);
         newEnd = Math.max(newEnd, minEnd);
         setTrimEndFrac(newEnd);

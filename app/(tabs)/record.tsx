@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming, withSequence, Easing, withSpring } from 'react-native-reanimated';
 import Colors from '@/constants/colors';
 import SoloHeader from '@/components/SoloHeader';
+import WaveformTrimmer from '@/components/WaveformTrimmer';
 import { useData } from '@/lib/data-context';
 
 const MAX_DURATION_MS = 300000;
@@ -60,6 +61,8 @@ export default function RecordScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [trimData, setTrimData] = useState<{ startMs: number; endMs: number } | null>(null);
   const [title, setTitle] = useState('');
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
@@ -148,6 +151,8 @@ export default function RecordScreen() {
       const uri = recordingRef.current.getURI();
       setRecordedUri(uri);
       setIsRecording(false);
+      setIsEditing(true);
+      setTrimData(null);
       recordingRef.current = null;
     } catch (e) {
       console.error('Failed to stop recording:', e);
@@ -158,26 +163,43 @@ export default function RecordScreen() {
   const discardRecording = useCallback(() => {
     setRecordedUri(null);
     setRecordingDuration(0);
+    setIsEditing(false);
+    setTrimData(null);
     setTitle('');
   }, []);
+
+  const handleTrimConfirm = useCallback((startMs: number, endMs: number) => {
+    setTrimData({ startMs, endMs });
+    setIsEditing(false);
+  }, []);
+
+  const handleTrimDiscard = useCallback(() => {
+    discardRecording();
+  }, [discardRecording]);
+
+  const effectiveDurationMs = trimData ? (trimData.endMs - trimData.startMs) : recordingDuration;
 
   const saveRecording = useCallback(async () => {
     if (!recordedUri || !title.trim()) {
       Alert.alert('Missing Title', 'Please add a title for your recording.');
       return;
     }
-    if (recordingDuration < MIN_DURATION_MS) {
-      Alert.alert('Too Short', 'Recording must be at least 15 seconds.');
+    if (effectiveDurationMs < MIN_DURATION_MS) {
+      Alert.alert('Too Short', 'Your selection must be at least 15 seconds.');
       return;
     }
     try {
       await uploadAndPost({
         audioUri: recordedUri,
         title: title.trim(),
-        durationMs: recordingDuration,
+        durationMs: effectiveDurationMs,
+        trimStartMs: trimData?.startMs,
+        trimEndMs: trimData?.endMs,
       });
       setRecordedUri(null);
       setRecordingDuration(0);
+      setIsEditing(false);
+      setTrimData(null);
       setTitle('');
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -187,7 +209,7 @@ export default function RecordScreen() {
       console.error('Failed to upload:', e);
       Alert.alert('Upload Failed', 'Could not upload your recording. Please try again.');
     }
-  }, [recordedUri, title, recordingDuration, uploadAndPost]);
+  }, [recordedUri, title, effectiveDurationMs, trimData, uploadAndPost]);
 
   const formatDuration = (ms: number) => {
     const totalSec = Math.floor(ms / 1000);
@@ -223,12 +245,19 @@ export default function RecordScreen() {
     <View style={styles.container}>
       <SoloHeader />
 
-      {recordedUri && !isRecording ? (
+      {recordedUri && isEditing ? (
+        <WaveformTrimmer
+          audioUri={recordedUri}
+          durationMs={recordingDuration}
+          onConfirm={handleTrimConfirm}
+          onDiscard={handleTrimDiscard}
+        />
+      ) : recordedUri && !isRecording ? (
         <View style={styles.reviewContainer}>
           <View style={styles.reviewCard}>
             <Ionicons name="checkmark-circle" size={48} color={Colors.accent} />
-            <Text style={styles.reviewDuration}>{formatDuration(recordingDuration)}</Text>
-            <Text style={styles.reviewLabel}>recorded</Text>
+            <Text style={styles.reviewDuration}>{formatDuration(effectiveDurationMs)}</Text>
+            <Text style={styles.reviewLabel}>{trimData ? 'trimmed' : 'recorded'}</Text>
           </View>
           <TextInput
             style={styles.titleInput}

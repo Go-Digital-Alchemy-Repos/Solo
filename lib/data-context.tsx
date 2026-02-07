@@ -65,6 +65,8 @@ interface DataContextValue {
     title: string;
     durationMs: number;
     tags?: string[];
+    trimStartMs?: number;
+    trimEndMs?: number;
   }) => Promise<void>;
   toggleLike: (postId: string) => void;
   addComment: (postId: string, text: string) => void;
@@ -205,6 +207,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     title: string;
     durationMs: number;
     tags?: string[];
+    trimStartMs?: number;
+    trimEndMs?: number;
   }) => {
     setIsUploading(true);
     try {
@@ -225,6 +229,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       formData.append('durationMs', params.durationMs.toString());
       if (params.tags) {
         formData.append('tags', JSON.stringify(params.tags));
+      }
+      if (params.trimStartMs !== undefined && params.trimEndMs !== undefined) {
+        formData.append('trimStartMs', params.trimStartMs.toString());
+        formData.append('trimEndMs', params.trimEndMs.toString());
       }
 
       const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
