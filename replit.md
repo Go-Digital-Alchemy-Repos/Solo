@@ -18,6 +18,9 @@ Preferred communication style: Simple, everyday language.
 - **Data Persistence**: Session cookie stored in `AsyncStorage` for auth persistence. Likes and follows stored locally in `AsyncStorage`. Posts fetched from server via React Query
 - **Audio**: `expo-av` handles both recording (on the Record tab) and playback. The `PlaybackProvider` manages a single shared audio instance with play/pause/seek/resume controls and position tracking
 - **Creator Suite** (Record tab): Multi-segment recording (pause/resume), optional Teleprompter overlay with auto-scroll, Background Vibes selector (Coffee Shop/Nature/Lofi Beat at 10% volume mixed server-side via ffmpeg), WaveformTrimmer with transcript preview bubble, Redo button. Components: `Teleprompter.tsx`, `VibeSelector.tsx`
+  - Edit screen has Cancel/Post header, inline title input, scrubbing (tap/drag waveform to seek), and direct posting flow
+  - Post triggers a processing screen with pulsing gold animation while audio is trimmed server-side via ffmpeg, mixed with vibes, uploaded, and transcribed
+  - Server-side trimming uses ffmpeg with -ss (start) and -t (duration) flags based on trimStartMs/trimEndMs from the client
 - **Animations**: `react-native-reanimated` powers waveform bar animations, like button effects, and recording visualizations
 - **Fonts**: DM Sans (400, 500, 600, 700) loaded via `@expo-google-fonts/dm-sans`
 - **UI Style**: Dark theme (black `#000000` background, gold `#FFD700` accent). Constants defined in `constants/colors.ts`
