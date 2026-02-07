@@ -30,9 +30,10 @@ Preferred communication style: Simple, everyday language.
   - `POST /api/auth/logout` — Destroy session
   - `GET /api/auth/me` — Get current authenticated user
   - `PUT /api/auth/profile` — Update username, bio, avatar (multipart form with multer)
-  - `POST /api/solos` — Upload audio recording (requires auth)
+  - `POST /api/solos` — Upload audio recording (requires auth). Accepts optional `trimStartMs`/`trimEndMs` form fields for server-side audio trimming via ffmpeg
   - `GET /api/solos` — List all recordings
   - `GET /api/audio/:filename` — Stream audio file with byte-range support
+  - `POST /api/solos/:soloId/transcribe` — Generate word-level transcript using OpenAI gpt-4o-mini-transcribe
 - **Session Management**: `express-session` with `connect-pg-simple` for PostgreSQL-backed sessions. 30-day session expiry, httpOnly cookies, secure in production
 - **File Uploads**: `multer` for avatar and audio file uploads, stored in `uploads/avatars/` and `uploads/audio/`
 - **CORS**: Dynamic CORS configuration supporting Replit dev/deployment domains and localhost origins
@@ -42,7 +43,7 @@ Preferred communication style: Simple, everyday language.
 - **ORM**: Drizzle ORM with PostgreSQL dialect
 - **Schema**: Defined in `shared/schema.ts`
   - `users` table: `id` (UUID), `email` (unique), `password_hash`, `username` (unique, nullable), `avatar_url`, `bio`, `created_at`
-  - `solos` table: `id` (UUID), `user_id`, `username`, `audio_url`, `timestamp`, `tags` (text array), `avatar_url`, `title`, `duration_ms`, `display_name`
+  - `solos` table: `id` (UUID), `user_id`, `username`, `audio_url`, `timestamp`, `tags` (text array), `avatar_url`, `title`, `duration_ms`, `display_name`, `transcript` (JSONB, nullable)
   - `session` table: managed by connect-pg-simple (not in Drizzle schema)
 - **Validation**: `drizzle-zod` generates Zod schemas from the Drizzle table definitions
 - **Migrations**: Managed via `drizzle-kit push` (use `--force` to avoid session table conflicts)
