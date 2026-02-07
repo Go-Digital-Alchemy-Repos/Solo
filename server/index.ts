@@ -15,6 +15,17 @@ declare module "http" {
 
 function setupCors(app: express.Application) {
   app.use((req, res, next) => {
+    if (req.path.startsWith("/api/audio/")) {
+      res.header("Access-Control-Allow-Origin", "*");
+      res.header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+      res.header("Access-Control-Allow-Headers", "Range, Content-Type");
+      res.header("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges");
+      if (req.method === "OPTIONS") {
+        return res.sendStatus(204);
+      }
+      return next();
+    }
+
     const origins = new Set<string>();
 
     if (process.env.REPLIT_DEV_DOMAIN) {
@@ -29,7 +40,6 @@ function setupCors(app: express.Application) {
 
     const origin = req.header("origin");
 
-    // Allow localhost origins for Expo web development (any port)
     const isLocalhost =
       origin?.startsWith("http://localhost:") ||
       origin?.startsWith("http://127.0.0.1:");

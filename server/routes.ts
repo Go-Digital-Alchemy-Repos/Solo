@@ -73,24 +73,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/audio/:fileId", (req, res) => {
     try {
       const { fileId } = req.params;
-      const filePath = path.join(UPLOADS_DIR, `${fileId}.m4a`);
+      const sanitized = fileId.replace(/[^a-zA-Z0-9\-]/g, "");
+      const filePath = path.join(UPLOADS_DIR, `${sanitized}.m4a`);
 
       if (!fs.existsSync(filePath)) {
         return res.status(404).json({ error: "Audio not found" });
       }
 
       const stat = fs.statSync(filePath);
-      res.set("Content-Type", "audio/mp4");
-      res.set("Content-Length", stat.size.toString());
+      const fileSize = stat.size;
+
+      res.set("Access-Control-Allow-Origin", "*");
+      res.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+      res.set("Access-Control-Allow-Headers", "Range, Content-Type");
+      res.set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges");
+      res.set("Content-Type", "audio/x-m4a");
       res.set("Accept-Ranges", "bytes");
       res.set("Cache-Control", "public, max-age=31536000");
 
-      const stream = fs.createReadStream(filePath);
-      stream.pipe(res);
+      const rangeHeader = req.headers.range;
+      if (rangeHeader) {
+        const parts = rangeHeader.replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+        if (start >= fileSize || end >= fileSize || start > end) {
+          res.status(416).set("Content-Range", `bytes */${fileSize}`);
+          return res.end();
+        }
+
+        const chunkSize = end - start + 1;
+        res.status(206);
+        res.set("Content-Range", `bytes ${start}-${end}/${fileSize}`);
+        res.set("Content-Length", chunkSize.toString());
+
+        const stream = fs.createReadStream(filePath, { start, end });
+        stream.pipe(res);
+      } else {
+        res.set("Content-Length", fileSize.toString());
+        const stream = fs.createReadStream(filePath);
+        stream.pipe(res);
+      }
     } catch (error) {
       console.error("Error streaming audio:", error);
       return res.status(404).json({ error: "Audio not found" });
     }
+  });
+
+  app.options("/api/audio/:fileId", (_req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Range, Content-Type");
+    res.set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges");
+    return res.sendStatus(204);
   });
 
   const httpServer = createServer(app);
