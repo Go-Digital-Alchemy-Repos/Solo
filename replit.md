@@ -41,7 +41,8 @@ Preferred communication style: Simple, everyday language.
   - `GET /api/solos` — List all recordings
   - `GET /api/audio/:filename` — Stream audio file with byte-range support
   - `POST /api/solos/:soloId/transcribe` — Generate word-level transcript using OpenAI gpt-4o-mini-transcribe
-- **Session Management**: `express-session` with `connect-pg-simple` for PostgreSQL-backed sessions. 30-day session expiry, httpOnly cookies, secure in production
+- **BetterAuth Integration**: BetterAuth runs alongside existing auth at `/api/better-auth/*`. Config in `server/auth.ts`. Uses Drizzle adapter with dedicated tables (`ba_user`, `ba_session`, `ba_account`, `ba_verification`). Admin plugin provides role-based access control (roles: `user`, `admin`). Middleware in `server/middleware/auth.ts` (session validation checking both legacy and BetterAuth sessions) and `server/middleware/requireRole.ts` (role guard). BetterAuth endpoints: sign-up at `/api/better-auth/sign-up/email`, sign-in at `/api/better-auth/sign-in/email`, sign-out at `/api/better-auth/sign-out`, health at `/api/better-auth/ok`
+- **Session Management (Legacy)**: `express-session` with `connect-pg-simple` for PostgreSQL-backed sessions. 30-day session expiry, httpOnly cookies, secure in production. Still used by mobile app login flows
 - **File Uploads**: `multer` for avatar and audio file uploads, stored in `uploads/avatars/` and `uploads/audio/`
 - **CORS**: Dynamic CORS configuration supporting Replit dev/deployment domains and localhost origins
 - **Static Serving**: In production, serves the Expo web build from a `dist/` directory. In development, proxies to the Expo Metro bundler
@@ -50,7 +51,11 @@ Preferred communication style: Simple, everyday language.
 ### Database Schema (Drizzle ORM)
 - **ORM**: Drizzle ORM with PostgreSQL dialect
 - **Schema**: Defined in `shared/schema.ts`
-  - `users` table: `id` (UUID), `email` (unique), `password_hash`, `username` (unique, nullable), `avatar_url`, `bio`, `is_admin` (boolean, default false), `created_at`
+  - `users` table: `id` (UUID), `email` (unique), `password_hash`, `username` (unique, nullable), `avatar_url`, `bio`, `is_admin` (boolean, default false), `role` (text, default 'user'), `created_at`
+  - `ba_user` table: BetterAuth user store - `id`, `name`, `email`, `email_verified`, `image`, `role`, `banned`, `ban_reason`, `ban_expires`, `created_at`, `updated_at`
+  - `ba_session` table: BetterAuth session store - `id`, `expires_at`, `token`, `ip_address`, `user_agent`, `user_id` (FK to ba_user)
+  - `ba_account` table: BetterAuth account/credentials store - `id`, `account_id`, `provider_id`, `user_id` (FK to ba_user), `password`, etc.
+  - `ba_verification` table: BetterAuth verification tokens - `id`, `identifier`, `value`, `expires_at`
   - `solos` table: `id` (UUID), `user_id`, `username`, `audio_url`, `timestamp`, `tags` (text array), `avatar_url`, `title`, `duration_ms`, `display_name`, `transcript` (JSONB, nullable)
   - `app_docs` table: `id` (serial), `title`, `content`, `category`, `sort_order` (integer, default 0), `created_at`, `updated_at`
   - `session` table: managed by connect-pg-simple (not in Drizzle schema)
