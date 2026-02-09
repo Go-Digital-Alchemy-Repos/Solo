@@ -28,7 +28,8 @@ Preferred communication style: Simple, everyday language.
   - Audio mixing: voice at 100% volume, vibe background at 10% volume with amix weights ensuring voice clarity
 - **Animations**: `react-native-reanimated` powers waveform bar animations, like button effects, and recording visualizations
 - **Fonts**: DM Sans (400, 500, 600, 700) loaded via `@expo-google-fonts/dm-sans`
-- **UI Style**: Dark theme (black `#000000` background, gold `#FFD700` accent). Constants defined in `constants/colors.ts`
+- **Design System**: Centralized in `constants/theme.ts` and `components/ui/`. Tokens: `Spacing` (xs–xxl), `Radius` (sm–pill), `FontSize` (xs–display), `FontFamily` (DM Sans weights), `Shadows` (soft/medium). UI primitives (`components/ui/index.ts` barrel): `Text` (9 variants: display/h1/h2/h3/body/bodySmall/label/caption/overline), `Button`, `IconButton`, `Card`, `Input`, `Modal`, `Toast`/`ToastProvider`, `Skeleton`, `EmptyState` (animated floating icon). All screens (Feed, Search, Profile, Record) use design tokens and `<Text>` component for consistent typography
+- **UI Style**: Dark theme (black `#000000` background, gold `#FFD700` accent). Colors in `constants/colors.ts`, design tokens in `constants/theme.ts`
 - **Platform Support**: iOS, Android, and Web. Platform-specific code handles safe areas, haptics (disabled on web), and keyboard behavior
 
 ### Backend (Express.js) — Feature-Based Modular Architecture
