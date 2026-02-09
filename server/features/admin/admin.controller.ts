@@ -3,7 +3,11 @@ import * as adminService from "./admin.service";
 import * as integrationsService from "./integrations.service";
 import { requireAdmin } from "../../utils/auth-helpers";
 import { AppError } from "../../lib/errors";
+import { logger } from "../../lib/logger";
 import { scanAllRoutes, createStubDocument, mergeContent, generateAutoSection } from "../../utils/routeScanner";
+import { db } from "../../db";
+import { solos } from "@shared/schema";
+import { eq, desc, sql } from "drizzle-orm";
 import * as fs from "fs";
 import * as path from "path";
 import { DOCS_DIR } from "../../utils/paths";
@@ -308,4 +312,135 @@ export async function testIntegration(req: Request, res: Response) {
 
   const result = await integrationsService.testIntegration(service as integrationsService.ServiceName);
   return res.json(result);
+}
+
+export async function listProcessingJobs(req: Request, res: Response) {
+  const userId = await requireAdmin(req, res);
+  if (!userId) return;
+
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+  const statusFilter = req.query.status as string | undefined;
+
+  let query = db
+    .select({
+      id: solos.id,
+      userId: solos.userId,
+      username: solos.username,
+      title: solos.title,
+      status: solos.status,
+      processingStep: solos.processingStep,
+      processingError: solos.processingError,
+      attempts: solos.attempts,
+      durationMs: solos.durationMs,
+      createdAt: solos.createdAt,
+      updatedAt: solos.updatedAt,
+      readyAt: solos.readyAt,
+    })
+    .from(solos)
+    .orderBy(desc(solos.updatedAt))
+    .limit(limit);
+
+  if (statusFilter && ['queued', 'processing', 'ready', 'failed'].includes(statusFilter)) {
+    query = query.where(eq(solos.status, statusFilter));
+  }
+
+  const jobs = await query;
+
+  const counts = await db
+    .select({
+      status: solos.status,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(solos)
+    .groupBy(solos.status);
+
+  const summary: Record<string, number> = {};
+  for (const row of counts) {
+    summary[row.status] = row.count;
+  }
+
+  return res.json({ jobs, summary });
+}
+
+export async function retryProcessingJob(req: Request, res: Response) {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const { soloId } = req.params;
+
+  const [solo] = await db.select().from(solos).where(eq(solos.id, soloId)).limit(1);
+  if (!solo) {
+    throw AppError.notFound("Solo not found");
+  }
+  if (solo.status !== 'failed') {
+    throw AppError.badRequest(`Solo is in '${solo.status}' state, only 'failed' jobs can be retried`);
+  }
+  if (solo.attempts >= 5) {
+    throw AppError.badRequest(`Solo has exceeded max retry attempts (${solo.attempts})`);
+  }
+
+  await db.update(solos).set({
+    status: 'queued',
+    processingStep: 'upload',
+    processingError: null,
+    attempts: solo.attempts + 1,
+    lastAttemptAt: new Date(),
+    updatedAt: new Date(),
+  }).where(eq(solos.id, soloId));
+
+  logger.info(`Admin retry: solo ${soloId} (attempt ${solo.attempts + 1})`, { soloId });
+
+  return res.json({ ok: true, soloId, newAttempt: solo.attempts + 1 });
+}
+
+export async function markJobFailed(req: Request, res: Response) {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const { soloId } = req.params;
+  const { reason } = req.body || {};
+
+  const [solo] = await db.select().from(solos).where(eq(solos.id, soloId)).limit(1);
+  if (!solo) {
+    throw AppError.notFound("Solo not found");
+  }
+  if (solo.status === 'ready') {
+    throw AppError.badRequest("Cannot mark a completed solo as failed");
+  }
+
+  const errorMsg = reason || 'Manually marked as failed by admin';
+
+  await db.update(solos).set({
+    status: 'failed',
+    processingError: errorMsg,
+    updatedAt: new Date(),
+  }).where(eq(solos.id, soloId));
+
+  logger.info(`Admin mark-failed: solo ${soloId}`, { soloId });
+
+  return res.json({ ok: true, soloId, status: 'failed' });
+}
+
+export async function resetJob(req: Request, res: Response) {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+
+  const { soloId } = req.params;
+
+  const [solo] = await db.select().from(solos).where(eq(solos.id, soloId)).limit(1);
+  if (!solo) {
+    throw AppError.notFound("Solo not found");
+  }
+
+  await db.update(solos).set({
+    status: 'queued',
+    processingStep: 'upload',
+    processingError: null,
+    attempts: 0,
+    updatedAt: new Date(),
+  }).where(eq(solos.id, soloId));
+
+  logger.info(`Admin reset: solo ${soloId}`, { soloId });
+
+  return res.json({ ok: true, soloId, status: 'queued', attempts: 0 });
 }

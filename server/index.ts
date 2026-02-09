@@ -13,9 +13,16 @@ import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import * as fs from "fs";
 import * as path from "path";
+import { logger, generateRequestId } from "./lib/logger";
 
 const app = express();
 const log = console.log;
+
+declare module "express-serve-static-core" {
+  interface Request {
+    requestId?: string;
+  }
+}
 
 declare module "http" {
   interface IncomingMessage {
@@ -87,31 +94,27 @@ function setupBodyParsing(app: express.Application) {
 
 function setupRequestLogging(app: express.Application) {
   app.use((req, res, next) => {
-    const start = Date.now();
-    const path = req.path;
-    let capturedJsonResponse: Record<string, unknown> | undefined = undefined;
+    const requestId = generateRequestId();
+    req.requestId = requestId;
+    res.setHeader("X-Request-Id", requestId);
 
-    const originalResJson = res.json;
-    res.json = function (bodyJson, ...args) {
-      capturedJsonResponse = bodyJson;
-      return originalResJson.apply(res, [bodyJson, ...args]);
-    };
+    const start = Date.now();
+    const reqPath = req.path;
 
     res.on("finish", () => {
-      if (!path.startsWith("/api")) return;
+      if (!reqPath.startsWith("/api")) return;
 
-      const duration = Date.now() - start;
+      const durationMs = Date.now() - start;
+      const userId = req.session?.userId || req.authUser?.id;
 
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
+      logger.request({
+        requestId,
+        method: req.method,
+        path: reqPath,
+        status: res.statusCode,
+        durationMs,
+        userId: userId || undefined,
+      });
     });
 
     next();

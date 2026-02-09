@@ -20,4 +20,9 @@ router.get("/integrations", asyncHandler(adminController.getIntegrations));
 router.put("/integrations", asyncHandler(adminController.saveIntegration));
 router.post("/integrations/:service/test", asyncHandler(adminController.testIntegration));
 
+router.get("/processing-jobs", asyncHandler(adminController.listProcessingJobs));
+router.post("/processing-jobs/:soloId/retry", asyncHandler(adminController.retryProcessingJob));
+router.post("/processing-jobs/:soloId/fail", asyncHandler(adminController.markJobFailed));
+router.post("/processing-jobs/:soloId/reset", asyncHandler(adminController.resetJob));
+
 export default router;

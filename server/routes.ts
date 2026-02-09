@@ -9,12 +9,16 @@ import vibesRoutes from "./features/vibes/vibes.routes";
 import adminRoutes from "./features/admin/admin.routes";
 import { streamAudio, audioOptions } from "./features/solos/solos.controller";
 import { serveAvatar } from "./features/auth/auth.controller";
+import { logger } from "./lib/logger";
 
 declare module "express-session" {
   interface SessionData {
     userId?: string;
   }
 }
+
+const clientErrors: Array<{ timestamp: string; message: string; platform: string; stack?: string }> = [];
+const MAX_CLIENT_ERRORS = 100;
 
 export async function registerRoutes(app: Express): Promise<Server> {
 
@@ -27,6 +31,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.head("/api/audio/:fileId", streamAudio);
   app.options("/api/audio/:fileId", audioOptions);
   app.get("/api/avatars/:fileName", serveAvatar);
+
+  app.post("/api/telemetry/error", (req, res) => {
+    const { message, stack, platform, componentStack, screen } = req.body || {};
+    if (!message) {
+      return res.status(400).json({ ok: false });
+    }
+
+    const entry = {
+      timestamp: new Date().toISOString(),
+      message: String(message).slice(0, 500),
+      platform: String(platform || "unknown"),
+      stack: stack ? String(stack).slice(0, 1000) : undefined,
+      screen: screen || undefined,
+    };
+
+    clientErrors.unshift(entry);
+    if (clientErrors.length > MAX_CLIENT_ERRORS) {
+      clientErrors.length = MAX_CLIENT_ERRORS;
+    }
+
+    logger.warn(`Client error: ${entry.message}`, {
+      error: entry.stack?.split("\n")[0],
+    });
+
+    return res.json({ ok: true });
+  });
+
+  app.get("/api/admin/client-errors", async (req, res) => {
+    const { requireAdmin } = await import("./utils/auth-helpers");
+    try {
+      await requireAdmin(req, res);
+    } catch {
+      return res.status(401).json({ ok: false, error: "Unauthorized" });
+    }
+    return res.json({ errors: clientErrors, count: clientErrors.length });
+  });
 
   const adminTemplatePath = path.resolve(process.cwd(), "server", "templates", "admin.html");
   app.get("/admin", (req, res) => {
