@@ -82,7 +82,7 @@ interface DataContextValue {
 
 const DataContext = createContext<DataContextValue | null>(null);
 
-function generateWaveform(length: number = 40): number[] {
+function generateWaveform(length: number = 70): number[] {
   const data: number[] = [];
   for (let i = 0; i < length; i++) {
     data.push(0.15 + Math.random() * 0.85);

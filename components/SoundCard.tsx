@@ -170,7 +170,7 @@ export default function SoundCard({ post }: SoundCardProps) {
             data={post.waveformData}
             isPlaying={isThisPlaying}
             progress={progress}
-            height={48}
+            height={64}
             barWidth={3}
           />
         )}
@@ -357,6 +357,8 @@ const styles = StyleSheet.create({
   },
   waveformContainer: {
     marginBottom: 12,
+    marginHorizontal: -16,
+    paddingHorizontal: 0,
     overflow: 'hidden',
   },
   controls: {
