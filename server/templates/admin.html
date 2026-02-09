@@ -1544,6 +1544,53 @@
           </div>
         </div>
 
+        <!-- Stripe -->
+        <div class="intg-card" data-service="stripe">
+          <div class="intg-header">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div class="intg-icon" style="background:linear-gradient(135deg,#635BFF,#A259FF);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20M12 2v20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/></svg>
+              </div>
+              <div class="intg-name">Stripe</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <span class="intg-status" id="stripe-status">Not Configured</span>
+              <label class="toggle">
+                <input type="checkbox" id="stripe-enabled">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="intg-body">
+            <div class="intg-fields">
+              <div class="intg-row">
+                <label>Secret Key</label>
+                <input type="password" class="form-input" id="stripe-secretKey" placeholder="sk_test_...">
+              </div>
+              <div class="intg-row">
+                <label>Publishable Key</label>
+                <input type="text" class="form-input" id="stripe-publishableKey" placeholder="pk_test_...">
+              </div>
+              <div class="intg-row">
+                <label>Webhook Secret</label>
+                <input type="password" class="form-input" id="stripe-webhookSecret" placeholder="whsec_...">
+              </div>
+              <div class="intg-row">
+                <label>Mode</label>
+                <select class="form-input" id="stripe-mode">
+                  <option value="test">Test</option>
+                  <option value="live">Live</option>
+                </select>
+              </div>
+            </div>
+            <div class="intg-actions">
+              <button class="btn btn-primary" onclick="saveIntegration('stripe')">Save</button>
+              <button class="btn btn-outline" onclick="testIntegration('stripe')">Test Connection</button>
+              <span class="intg-test-result" id="stripe-test-result"></span>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -2351,6 +2398,7 @@
       mailgun: ['apiKey', 'domain', 'fromEmail', 'region'],
       cloudflare_r2: ['accountId', 'bucketName', 'accessKeyId', 'secretAccessKey'],
       twilio: ['accountSid', 'authToken', 'phoneNumber'],
+      stripe: ['secretKey', 'publishableKey', 'webhookSecret', 'mode'],
     };
 
     async function loadIntegrations() {
