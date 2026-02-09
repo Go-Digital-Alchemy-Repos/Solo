@@ -1,0 +1,267 @@
+NON-DESTRUCTIVE REPLIT PROMPT — Build Real-Time Direct Messaging (Instagram/X-style) with Sockets + Modern RN Chat UI
+
+You are working in an existing monorepo:
+- Expo (React Native) app with expo-router (app/…)
+- Express backend (server/…)
+- PostgreSQL + Drizzle schema in shared/schema.ts
+- Session-based auth (express-session + connect-pg-simple)
+DO NOT remove or rewrite working features. Make additive, non-destructive changes only. Keep existing routing and screens working. Keep UI consistent (dark theme + gold accent + DM Sans). Make this a production-grade DM system.
+
+GOAL
+Implement a complete Direct Messaging system (like Instagram or X DMs):
+- 1:1 chats (required) + group chats (optional but recommended if easy)
+- Conversation list (inbox) + chat thread + message composer
+- Real-time messaging using sockets (instant send/receive)
+- Message delivery + read receipts
+- Typing indicators, online presence, and “last seen”
+- Message search (at least within a conversation)
+- Message actions: copy, delete-for-me, delete-for-everyone (optional), report (optional)
+- Attachments: images now; audio attachments optional (since app is audio-first)
+- Offline support (queue outgoing, optimistic UI)
+- Push notifications when recipient is offline (Expo notifications)
+- Admin-safe: do not expose messages to admins by default; treat as private user data
+
+ARCHITECTURE CHOICE
+Use Socket.IO (or a modern WS library) on the server for real-time events, but ALWAYS persist messages to Postgres as source-of-truth.
+The socket layer is for instant delivery; the REST API is for sync/backfill/pagination.
+
+PHASE 0 — DISCOVERY / NON-DESTRUCTIVE FIT CHECK
+1) Identify current auth/session strategy for API calls and whether mobile requests include cookies reliably.
+2) Confirm the app has a concept of “User ID” and can fetch “current user” quickly (GET /api/auth/me).
+3) Identify where “Admin” area exists; do not expose DM content there.
+
+PHASE 1 — DATABASE SCHEMA (Drizzle + Postgres)
+Update shared/schema.ts (additive) with these tables:
+
+1) conversations
+- id (uuid pk)
+- type (enum: "direct" | "group")
+- createdAt, updatedAt
+- lastMessageAt (timestamp nullable)
+- lastMessageId (uuid nullable)
+- createdByUserId (fk users.id)
+
+2) conversation_participants
+- conversationId (fk)
+- userId (fk)
+- role (enum: "member" | "admin")  (for group only; ok for direct too)
+- joinedAt
+- leftAt nullable
+- isMuted boolean default false
+- lastReadMessageId nullable
+- lastReadAt nullable
+Primary key: (conversationId, userId)
+Indexes:
+- userId + conversationId
+- conversationId + lastReadAt
+
+3) messages
+- id (uuid pk)
+- conversationId (fk)
+- senderId (fk users.id)
+- type (enum: "text" | "image" | "audio" | "system")
+- text (text nullable)
+- mediaUrl (text nullable)
+- mediaMeta (jsonb nullable) // width/height/duration/mime
+- clientNonce (text nullable) // idempotency key from client
+- createdAt
+- editedAt nullable
+- deletedAt nullable
+- deletedForAllAt nullable (optional)
+Indexes:
+- conversationId + createdAt desc
+- senderId
+- (conversationId, clientNonce) unique where clientNonce is not null (idempotency)
+
+4) message_receipts (optional but recommended for delivery/read)
+- messageId (fk)
+- userId (fk)
+- deliveredAt nullable
+- readAt nullable
+Primary key: (messageId, userId)
+Indexes:
+- userId + readAt
+- messageId
+
+5) user_presence (optional; can be ephemeral in Redis later)
+- userId (pk fk)
+- status (enum: "online" | "offline")
+- lastSeenAt
+- updatedAt
+
+MIGRATIONS
+Generate and run migrations safely.
+
+PHASE 2 — BACKEND API (Express) + SOCKET SERVER
+Add a new route module: server/routes/dm.routes.ts mounted under:
+- /api/dm/...
+
+Add a new socket module: server/realtime/socket.ts
+
+A) REST endpoints (for initial load, pagination, and reliability)
+1) GET /api/dm/conversations
+- returns conversations for current user, sorted by lastMessageAt
+- includes minimal peer info for direct chats: otherUser { id, username, avatarUrl }
+- includes unread counts (derive from lastReadAt/lastReadMessageId)
+
+2) POST /api/dm/conversations/direct
+Body: { userId: string }
+- create or reuse a direct conversation between current user and userId (unique constraint or lookup)
+- returns conversationId
+
+3) GET /api/dm/conversations/:id/messages?cursor=&limit=
+- cursor pagination (createdAt/id)
+- returns messages newest-first or oldest-first with consistent paging
+- includes receipt state for current user if supported
+
+4) POST /api/dm/conversations/:id/messages
+Body: { type, text?, mediaUrl?, mediaMeta?, clientNonce }
+- persists message
+- returns message with server id + createdAt
+- emits realtime event to participants via socket
+
+5) POST /api/dm/messages/:id/read
+- marks read for current user (update lastRead… + message_receipts)
+- emits "read_receipt" to other participants
+
+6) POST /api/dm/messages/:id/delete (delete-for-me)
+- marks message hidden for current user (implement via per-user delete table OR store in receipts/details)
+- For delete-for-everyone (optional): require sender/admin and set deletedForAllAt, emit event
+
+7) DM attachments upload
+- POST /api/dm/uploads (multipart) -> returns mediaUrl + meta
+- Use existing storage approach (uploads/) or storage adapter if you created one
+- Validate size/mime; images required; audio optional
+
+B) Socket.IO events (instant messaging)
+Mount socket server alongside Express:
+- Authenticate socket connections using the SAME session system as HTTP.
+  - Parse and validate session cookie on socket handshake.
+  - Attach userId to socket context.
+- Join rooms:
+  - room per user: `user:{userId}`
+  - room per conversation: `conv:{conversationId}` (join only if participant)
+
+Events to implement:
+Client -> Server:
+- dm:join_conversation { conversationId }
+- dm:leave_conversation { conversationId }
+- dm:send_message { conversationId, type, text?, mediaUrl?, mediaMeta?, clientNonce }
+- dm:typing { conversationId, isTyping: boolean }
+- dm:mark_read { conversationId, messageId }
+
+Server -> Client:
+- dm:message_created { conversationId, message }
+- dm:message_updated { conversationId, message } (edits/deletes)
+- dm:typing { conversationId, userId, isTyping }
+- dm:read_receipt { conversationId, userId, messageId, readAt }
+- dm:presence { userId, status, lastSeenAt } (optional)
+- dm:error { code, message }
+
+Reliability rules:
+- On dm:send_message, ALWAYS persist to DB first, then emit.
+- Use clientNonce for idempotency so duplicate sends don’t create duplicate messages.
+- Acknowledge socket sends with an ACK payload { ok: true, message } or { ok: false, error }.
+
+C) Validation + error shape
+- Use your standard validateBody + AppError patterns for all DM endpoints.
+
+D) Security + authorization
+- Every DM request checks conversation membership.
+- Do not allow user enumeration beyond existing app behavior.
+- Rate-limit send_message and uploads.
+- Sanitize text content.
+
+PHASE 3 — PUSH NOTIFICATIONS (Expo)
+Implement push notifications for offline recipients:
+1) Store Expo push tokens:
+- add user_push_tokens table:
+  - id uuid
+  - userId fk
+  - token text unique
+  - createdAt, lastSeenAt
+2) Client registers token after login and updates it on app start.
+3) When new message is created:
+- for each recipient not currently active in the conversation (or not online), send an Expo push:
+  - title: sender username
+  - body: message preview (for text) or “Sent an image”
+  - data: { conversationId }
+4) Handle notification tap to deep link to the conversation screen.
+
+PHASE 4 — FRONTEND UI (Modern, Premium Chat Experience)
+Use a modern RN chat UI approach compatible with Expo SDK 54:
+- Implement chat thread UI with a high-performance list (FlashList recommended) and custom bubbles for full control,
+  OR use a modern maintained chat UI library IF it is compatible with Expo and RN 0.81. 
+- REQUIRED: Before coding, quickly evaluate 2–3 modern options and pick the best fit for Expo:
+  Option A: Custom thread UI using FlashList + Reanimated (best control/premium feel)
+  Option B: A maintained chat UI kit/library (only if it works cleanly with Expo and doesn’t fight RN 0.81)
+Whichever is chosen, ensure:
+- Smooth scrolling, inverted list, message grouping, day separators
+- Typing indicator animation
+- Optimistic sends with “sending/failed” states and retry
+- Long-press message actions (copy/delete)
+- Image attachment picker + preview
+- Read receipts and “seen” status in header like IG/X (simple, tasteful)
+- Accessibility + keyboard handling done correctly
+
+Screens/routes to add (expo-router):
+1) Inbox: app/(tabs)/messages.tsx (or add a new tab “Messages”)
+- list conversations with avatar, name, last message, timestamp, unread badge
+- search bar for conversations/users
+
+2) Chat thread: app/messages/[conversationId].tsx
+- header shows peer info + online/last seen
+- message list + composer
+- attachments button
+
+3) New Message: app/messages/new.tsx
+- user search + start direct conversation
+
+State management:
+- Create lib/dm/:
+  - dm-api.ts (REST client)
+  - dm-socket.ts (socket connection manager)
+  - dm-store.ts (React Query integration + local optimistic cache)
+- Socket connection should:
+  - connect after auth
+  - re-connect on app foreground
+  - resubscribe to active conversation
+  - queue outgoing messages when offline and flush on reconnect
+
+PHASE 5 — OBSERVABILITY & ADMIN SUPPORT (WITHOUT READING DMs)
+- Log DM system health metrics/events WITHOUT logging message text:
+  - dm events: send failures, upload failures, socket auth failures, queue lengths
+- Add to System Status (if you built it):
+  - Socket server status
+  - messages table write latency (basic)
+- Do NOT build an admin feature to read user messages unless explicitly requested (privacy).
+
+PHASE 6 — TESTING / ACCEPTANCE
+Add minimal smoke tests or scripts:
+- create conversation
+- send message (REST)
+- send message (socket)
+- receive message live on second client session
+- mark read + verify read receipt
+- offline push notification flow (simulate)
+- idempotency: same clientNonce does not duplicate
+
+ACCEPTANCE CRITERIA
+- Users can start a conversation, exchange messages instantly, see messages appear in real time.
+- Messages persist and load correctly with pagination.
+- Typing indicators and read receipts work.
+- Offline: messages send with optimistic UI and retry; recipient gets push notification.
+- Socket auth uses existing session and membership is enforced.
+- UI feels premium, smooth, consistent with dark/gold theme and DM Sans.
+- All changes are additive and do not break existing audio/posting flows.
+
+IMPLEMENTATION NOTE
+Do this in small steps:
+1) DB schema + basic REST (list/create convo, list/send messages)
+2) Socket layer (join, send/receive, typing)
+3) UI inbox + thread with optimistic sends
+4) Receipts + unread counts
+5) Push notifications
+6) Polish pass (animations, skeletons, empty states)
+
+Proceed now and implement the full DM system accordingly.

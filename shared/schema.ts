@@ -217,6 +217,64 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+export const dmConversations = pgTable("dm_conversations", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  type: text("type").notNull().default("direct"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  lastMessageAt: timestamp("last_message_at"),
+  lastMessagePreview: text("last_message_preview"),
+  createdByUserId: varchar("created_by_user_id").notNull(),
+});
+
+export const dmParticipants = pgTable("dm_participants", {
+  conversationId: varchar("conversation_id").notNull().references(() => dmConversations.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull(),
+  role: text("role").notNull().default("member"),
+  joinedAt: timestamp("joined_at").defaultNow().notNull(),
+  leftAt: timestamp("left_at"),
+  isMuted: boolean("is_muted").default(false).notNull(),
+  lastReadMessageId: varchar("last_read_message_id"),
+  lastReadAt: timestamp("last_read_at"),
+}, (table) => [
+  index("dm_participants_user_idx").on(table.userId, table.conversationId),
+  index("dm_participants_conv_idx").on(table.conversationId),
+]);
+
+export const dmMessages = pgTable("dm_messages", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id").notNull().references(() => dmConversations.id, { onDelete: "cascade" }),
+  senderId: varchar("sender_id").notNull(),
+  type: text("type").notNull().default("text"),
+  text: text("text"),
+  mediaUrl: text("media_url"),
+  mediaMeta: jsonb("media_meta"),
+  clientNonce: text("client_nonce"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  editedAt: timestamp("edited_at"),
+  deletedAt: timestamp("deleted_at"),
+}, (table) => [
+  index("dm_messages_conv_created_idx").on(table.conversationId, table.createdAt),
+  index("dm_messages_sender_idx").on(table.senderId),
+  index("dm_messages_nonce_idx").on(table.conversationId, table.clientNonce),
+]);
+
+export const userPresence = pgTable("user_presence", {
+  userId: varchar("user_id").primaryKey(),
+  status: text("status").notNull().default("offline"),
+  lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type DmConversation = typeof dmConversations.$inferSelect;
+export type DmParticipant = typeof dmParticipants.$inferSelect;
+export type DmMessage = typeof dmMessages.$inferSelect;
+export type UserPresence = typeof userPresence.$inferSelect;
+
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
   passwordHash: true,
