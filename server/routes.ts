@@ -50,30 +50,22 @@ async function generateTranscript(soloId: string, audioFilePath: string, duratio
     const file = await toFile(compatBuffer, `audio.${format}`);
     const response = await openai.audio.transcriptions.create({
       file,
-      model: "whisper-1",
-      response_format: "verbose_json",
-      timestamp_granularities: ["word"],
-    } as any) as any;
+      model: "gpt-4o-mini-transcribe",
+    });
 
     const text = response.text || "";
-    let words: { word: string; start: number; end: number }[] = [];
+    const wordsFromText = text.split(/\s+/).filter(Boolean);
+    const durationSec = durationMs / 1000;
+    const pauseFraction = 0.1;
+    const speakingDuration = durationSec * (1 - pauseFraction);
+    const wordDuration = speakingDuration / Math.max(wordsFromText.length, 1);
+    const startOffset = durationSec * (pauseFraction / 2);
 
-    if (response.words && Array.isArray(response.words) && response.words.length > 0) {
-      words = response.words.map((w: any) => ({
-        word: w.word,
-        start: w.start,
-        end: w.end,
-      }));
-    } else {
-      const wordsFromText = text.split(/\s+/).filter(Boolean);
-      const durationSec = durationMs / 1000;
-      const wordDuration = durationSec / Math.max(wordsFromText.length, 1);
-      words = wordsFromText.map((w: string, i: number) => ({
-        word: w,
-        start: i * wordDuration,
-        end: (i + 1) * wordDuration,
-      }));
-    }
+    const words = wordsFromText.map((w: string, i: number) => ({
+      word: w,
+      start: startOffset + i * wordDuration,
+      end: startOffset + (i + 1) * wordDuration,
+    }));
 
     const transcript: Transcript = { text, words };
 

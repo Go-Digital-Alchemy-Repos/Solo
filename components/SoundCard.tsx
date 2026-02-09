@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput, FlatList, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, { useAnimatedStyle, withSpring, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import Colors from '@/constants/colors';
 import Avatar from './Avatar';
@@ -105,8 +106,16 @@ export default function SoundCard({ post }: SoundCardProps) {
     try {
       const baseUrl = getApiUrl();
       const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
+      const headers: Record<string, string> = {};
+      if (Platform.OS !== 'web') {
+        const sessionCookie = await AsyncStorage.getItem('solo_auth_session');
+        if (sessionCookie) {
+          headers['Cookie'] = sessionCookie;
+        }
+      }
       const res = await fetchFn(new URL(`/api/solos/${post.id}/transcribe`, baseUrl).toString(), {
         method: 'POST',
+        headers,
         credentials: 'include',
       } as any);
       if (res.ok) {

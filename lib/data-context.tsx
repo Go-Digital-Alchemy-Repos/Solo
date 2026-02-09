@@ -248,9 +248,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
 
+      const headers: Record<string, string> = {};
+      if (Platform.OS !== 'web') {
+        const sessionCookie = await AsyncStorage.getItem('solo_auth_session');
+        if (sessionCookie) {
+          headers['Cookie'] = sessionCookie;
+        }
+      }
+
       const res = await fetchFn(new URL('/api/solos', baseUrl).toString(), {
         method: 'POST',
         body: formData,
+        headers,
         credentials: 'include',
       } as any);
 
