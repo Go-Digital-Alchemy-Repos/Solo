@@ -33,7 +33,6 @@
       min-height: 100vh;
     }
 
-    /* Login Screen */
     .login-screen {
       display: flex;
       align-items: center;
@@ -127,7 +126,6 @@
       text-align: center;
     }
 
-    /* Main Layout */
     .app { display: none; min-height: 100vh; }
     .app.active { display: flex; flex-direction: column; }
 
@@ -194,7 +192,6 @@
       background: var(--danger-dim);
     }
 
-    /* Tabs */
     .tab-bar {
       display: flex;
       background: var(--surface);
@@ -223,7 +220,6 @@
       border-bottom-color: var(--accent);
     }
 
-    /* Content */
     .tab-content {
       display: none;
       padding: 24px;
@@ -234,7 +230,6 @@
       display: block;
     }
 
-    /* Stats Cards */
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -277,7 +272,6 @@
       color: var(--accent);
     }
 
-    /* Section Headers */
     .section-header {
       display: flex;
       align-items: center;
@@ -291,7 +285,6 @@
       color: var(--text);
     }
 
-    /* Tables */
     .table-wrap {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -357,7 +350,6 @@
       border: 1px solid var(--border);
     }
 
-    /* Action Buttons */
     .btn {
       padding: 8px 16px;
       border: none;
@@ -406,7 +398,6 @@
       gap: 6px;
     }
 
-    /* Search Bar */
     .search-bar {
       display: flex;
       gap: 12px;
@@ -432,7 +423,6 @@
       color: var(--text-muted);
     }
 
-    /* Pagination */
     .pagination {
       display: flex;
       align-items: center;
@@ -452,7 +442,6 @@
       margin: 0 8px;
     }
 
-    /* Tag Chips */
     .tag-chip {
       display: inline-block;
       padding: 3px 10px;
@@ -464,65 +453,6 @@
       margin: 2px 3px;
     }
 
-    /* Docs */
-    .docs-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .doc-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px;
-      transition: border-color 0.2s;
-    }
-
-    .doc-card:hover {
-      border-color: rgba(255, 255, 255, 0.15);
-    }
-
-    .doc-card-header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      margin-bottom: 8px;
-    }
-
-    .doc-card-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--text);
-    }
-
-    .doc-card-category {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--accent);
-      background: var(--accent-dim);
-      padding: 3px 10px;
-      border-radius: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
-    }
-
-    .doc-card-content {
-      font-size: 14px;
-      color: var(--text-dim);
-      line-height: 1.6;
-      white-space: pre-wrap;
-      max-height: 200px;
-      overflow: hidden;
-    }
-
-    .doc-card-meta {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-top: 12px;
-    }
-
-    /* Modal */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -589,7 +519,6 @@
       line-height: 1.6;
     }
 
-    /* Loading */
     .loading {
       text-align: center;
       padding: 48px;
@@ -621,7 +550,512 @@
       margin-bottom: 8px;
     }
 
-    /* Responsive */
+    /* Doc Browser */
+    .docs-view-toggle {
+      display: flex;
+      gap: 4px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 3px;
+      margin-bottom: 16px;
+      width: fit-content;
+    }
+
+    .docs-view-toggle button {
+      padding: 8px 18px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+
+    .docs-view-toggle button.active {
+      background: var(--accent);
+      color: #000;
+    }
+
+    .docs-browser {
+      display: flex;
+      gap: 0;
+      height: calc(100vh - 160px);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .docs-sidebar {
+      width: 320px;
+      min-width: 320px;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+    }
+
+    .docs-sidebar-search {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .docs-sidebar-search input {
+      width: 100%;
+      padding: 9px 12px;
+      background: var(--surface-light);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+    }
+
+    .docs-sidebar-search input:focus {
+      border-color: var(--accent);
+    }
+
+    .docs-sidebar-search input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .docs-sidebar-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+
+    .docs-sidebar-list::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    .docs-sidebar-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .docs-sidebar-list::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    .docs-category-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+
+    .docs-category-header:hover {
+      background: var(--surface-hover);
+    }
+
+    .docs-category-header svg {
+      width: 16px;
+      height: 16px;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .docs-category-header .cat-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      flex: 1;
+    }
+
+    .docs-category-header .cat-count {
+      font-size: 10px;
+      color: var(--text-muted);
+      background: var(--surface-light);
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+
+    .docs-category-header .cat-chevron {
+      width: 12px;
+      height: 12px;
+      color: var(--text-muted);
+      transition: transform 0.2s;
+      flex-shrink: 0;
+    }
+
+    .docs-category-header.collapsed .cat-chevron {
+      transform: rotate(-90deg);
+    }
+
+    .docs-category-items {
+      overflow: hidden;
+    }
+
+    .docs-category-items.collapsed {
+      display: none;
+    }
+
+    .docs-item {
+      display: block;
+      padding: 7px 14px 7px 40px;
+      font-size: 13px;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.15s;
+      border-left: 2px solid transparent;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .docs-item:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+
+    .docs-item.active {
+      background: var(--accent-dim);
+      color: var(--accent);
+      border-left-color: var(--accent);
+    }
+
+    .docs-sidebar-actions {
+      padding: 12px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+    }
+
+    .docs-sidebar-actions button {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+    }
+
+    .docs-content-panel {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .docs-content-panel::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .docs-content-panel::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .docs-content-panel::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    .docs-welcome {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      padding: 48px;
+      text-align: center;
+    }
+
+    .docs-welcome svg {
+      width: 48px;
+      height: 48px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .docs-welcome h3 {
+      color: var(--text-dim);
+      font-size: 18px;
+      margin-bottom: 6px;
+    }
+
+    .docs-welcome p {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+
+    .docs-welcome-stats {
+      display: flex;
+      gap: 24px;
+    }
+
+    .docs-welcome-stats .ws {
+      text-align: center;
+    }
+
+    .docs-welcome-stats .ws-val {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .docs-welcome-stats .ws-lbl {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin-top: 2px;
+    }
+
+    .docs-meta-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 24px;
+      background: var(--surface-light);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .docs-meta-bar span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .docs-rendered {
+      padding: 32px;
+      flex: 1;
+    }
+
+    .docs-rendered h1 { font-size: 28px; font-weight: 700; color: var(--accent); margin: 24px 0 12px 0; line-height: 1.3; }
+    .docs-rendered h1:first-child { margin-top: 0; }
+    .docs-rendered h2 { font-size: 22px; font-weight: 600; color: var(--text); margin: 20px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid var(--border); line-height: 1.3; }
+    .docs-rendered h3 { font-size: 17px; font-weight: 600; color: var(--text-dim); margin: 16px 0 8px 0; line-height: 1.3; }
+    .docs-rendered h4 { font-size: 14px; font-weight: 600; color: var(--text-dim); margin: 14px 0 6px 0; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1.3; }
+    .docs-rendered p { color: var(--text-dim); line-height: 1.7; margin: 8px 0; font-size: 14px; }
+    .docs-rendered ul, .docs-rendered ol { margin: 8px 0 8px 24px; color: var(--text-dim); font-size: 14px; line-height: 1.7; }
+    .docs-rendered li { margin: 4px 0; }
+    .docs-rendered blockquote { border-left: 3px solid var(--accent); padding: 8px 16px; margin: 12px 0; background: var(--accent-dim); border-radius: 0 6px 6px 0; color: var(--text-dim); font-size: 14px; }
+    .docs-rendered hr { border: none; height: 1px; background: var(--border); margin: 20px 0; }
+    .docs-rendered pre { background: #0d0d0d; border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; margin: 12px 0; font-size: 13px; line-height: 1.5; }
+    .docs-rendered pre code { color: #e0e0e0; font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; background: none; padding: 0; border: none; font-size: 13px; }
+    .docs-rendered code { background: var(--surface-light); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', 'Fira Code', monospace; border: 1px solid var(--border); }
+    .docs-rendered a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.2s; }
+    .docs-rendered a:hover { border-bottom-color: var(--accent); }
+    .docs-rendered strong { color: var(--text); font-weight: 600; }
+    .docs-rendered table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+    .docs-rendered table th { text-align: left; padding: 10px 12px; background: var(--surface-light); color: var(--text-dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid var(--border); }
+    .docs-rendered table td { padding: 8px 12px; color: var(--text-dim); border-bottom: 1px solid var(--border); }
+    .docs-rendered table tr:last-child td { border-bottom: none; }
+
+    /* Coverage Dashboard */
+    .coverage-view { display: none; }
+    .coverage-view.active { display: block; }
+    .browser-view.active { display: flex; flex-direction: column; }
+
+    .cov-summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .cov-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+
+    .cov-card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    .cov-card-pct {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .cov-card-detail {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .cov-progress {
+      width: 100%;
+      height: 6px;
+      background: var(--surface-light);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .cov-progress-bar {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+
+    .cov-progress-bar.low { background: var(--danger); }
+    .cov-progress-bar.mid { background: #FF9500; }
+    .cov-progress-bar.high { background: var(--success); }
+
+    .cov-missing {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+
+    .cov-missing-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--danger);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .cov-missing-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .cov-missing-item {
+      padding: 5px 12px;
+      background: var(--danger-dim);
+      border: 1px solid rgba(255, 68, 68, 0.3);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--danger);
+      font-weight: 500;
+    }
+
+    .cov-details {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .cov-detail-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .cov-detail-header {
+      padding: 14px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      background: var(--surface-light);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .cov-detail-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .cov-detail-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+
+    .cov-detail-row:last-child {
+      border-bottom: none;
+    }
+
+    .cov-status-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .cov-status-icon.ok { background: rgba(52, 199, 89, 0.2); color: var(--success); }
+    .cov-status-icon.warn { background: rgba(255, 149, 0, 0.2); color: #FF9500; }
+    .cov-status-icon.miss { background: var(--danger-dim); color: var(--danger); }
+
+    .cov-detail-name {
+      flex: 1;
+      color: var(--text-dim);
+    }
+
+    .cov-detail-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .cov-actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      justify-content: flex-end;
+    }
+
+    .sync-toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface);
+      border: 1px solid var(--accent-border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      z-index: 300;
+      display: none;
+      max-width: 360px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+
+    .sync-toast.active {
+      display: block;
+    }
+
+    .sync-toast-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+
+    .sync-toast-body {
+      font-size: 12px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
     @media (max-width: 768px) {
       .topbar { padding: 12px 16px; }
       .tab-bar { padding: 0 12px; overflow-x: auto; }
@@ -630,12 +1064,14 @@
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
       .table-wrap { overflow-x: auto; }
       table { min-width: 600px; }
+      .docs-browser { flex-direction: column; height: auto; }
+      .docs-sidebar { width: 100%; min-width: 100%; max-height: 300px; border-right: none; border-bottom: 1px solid var(--border); }
+      .cov-summary, .cov-details { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Login Screen -->
   <div class="login-screen" id="loginScreen">
     <div class="login-card">
       <div class="login-logo">
@@ -657,7 +1093,6 @@
     </div>
   </div>
 
-  <!-- Main App -->
   <div class="app" id="mainApp">
     <div class="topbar">
       <div class="topbar-left">
@@ -762,16 +1197,45 @@
 
     <!-- Docs Tab -->
     <div class="tab-content" id="tab-docs">
-      <div class="section-header">
-        <h2 class="section-title">App Documentation</h2>
-        <button class="btn btn-primary" id="newDocBtn">+ New Document</button>
+      <div class="docs-view-toggle">
+        <button class="active" data-docs-view="browser">Doc Browser</button>
+        <button data-docs-view="coverage">Coverage Dashboard</button>
       </div>
-      <div id="docsLoading" class="loading"><div class="spinner"></div></div>
-      <div id="docsContent" style="display:none;">
-        <div class="docs-list" id="docsList"></div>
-        <div class="empty-state" id="docsEmpty" style="display:none;">
-          <h3>No documents yet</h3>
-          <p>Create your first document to start building app documentation.</p>
+
+      <div class="browser-view active" id="docsBrowserView">
+        <div id="docsLoading" class="loading"><div class="spinner"></div></div>
+        <div class="docs-browser" id="docsBrowser" style="display:none;">
+          <div class="docs-sidebar">
+            <div class="docs-sidebar-search">
+              <input type="text" id="docSearchInput" placeholder="Search docs...">
+            </div>
+            <div class="docs-sidebar-list" id="docsSidebarList"></div>
+            <div class="docs-sidebar-actions">
+              <button class="btn-primary" id="syncDocsBtn" style="background:var(--accent);color:#000;">Sync API Docs</button>
+              <button class="btn-outline" id="refreshDocsBtn" style="background:none;border:1px solid var(--border);color:var(--text-dim);">Refresh</button>
+            </div>
+          </div>
+          <div class="docs-content-panel" id="docsContentPanel">
+            <div class="docs-welcome" id="docsWelcome">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              <h3>Select a Document</h3>
+              <p>Choose a document from the sidebar to view its content.</p>
+              <div class="docs-welcome-stats" id="docsWelcomeStats"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="coverage-view" id="docsCoverageView">
+        <div class="cov-actions">
+          <button class="btn btn-primary" id="covSyncBtn">Sync API Docs</button>
+          <button class="btn btn-outline" id="covRefreshBtn">Refresh</button>
+        </div>
+        <div id="covLoading" class="loading"><div class="spinner"></div></div>
+        <div id="covContent" style="display:none;">
+          <div class="cov-summary" id="covSummary"></div>
+          <div class="cov-missing" id="covMissing"></div>
+          <div class="cov-details" id="covDetails"></div>
         </div>
       </div>
     </div>
@@ -804,31 +1268,9 @@
     </div>
   </div>
 
-  <!-- Doc Editor Modal -->
-  <div class="modal-overlay" id="docEditorModal">
-    <div class="modal">
-      <div class="modal-header">
-        <h3 class="modal-title" id="docEditorTitle">New Document</h3>
-        <button class="modal-close" onclick="closeModal('docEditorModal')">&times;</button>
-      </div>
-      <input type="hidden" id="docEditorId">
-      <div class="form-group">
-        <label>Title</label>
-        <input type="text" class="form-input" id="docTitle" placeholder="Document title">
-      </div>
-      <div class="form-group">
-        <label>Category</label>
-        <input type="text" class="form-input" id="docCategory" placeholder="e.g. General, Architecture, API">
-      </div>
-      <div class="form-group">
-        <label>Content</label>
-        <textarea class="form-input" id="docContent" placeholder="Write your documentation here..."></textarea>
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-outline" onclick="closeModal('docEditorModal')">Cancel</button>
-        <button class="btn btn-primary" id="saveDocBtn">Save Document</button>
-      </div>
-    </div>
+  <div class="sync-toast" id="syncToast">
+    <div class="sync-toast-title" id="syncToastTitle"></div>
+    <div class="sync-toast-body" id="syncToastBody"></div>
   </div>
 
   <script>
@@ -864,6 +1306,11 @@
 
     function closeModal(id) {
       document.getElementById(id).classList.remove('active');
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     // Auth
@@ -935,7 +1382,7 @@
 
         if (tab === 'reports') loadReports();
         if (tab === 'users') loadUsers();
-        if (tab === 'docs') loadDocs();
+        if (tab === 'docs') loadDocsTab();
       });
     });
 
@@ -1105,121 +1552,490 @@
       }
     }
 
-    // Docs
-    async function loadDocs() {
+    // ===== DOCS TAB =====
+    const ICON_PATHS = {
+      'rocket': '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>',
+      'layers': '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+      'star': '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+      'code': '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+      'monitor': '<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
+      'server': '<rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>',
+      'shield': '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+      'database': '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>',
+      'check-circle': '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+      'upload': '<polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>',
+      'terminal': '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>',
+      'settings': '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+      'link': '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+      'alert-triangle': '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+      'book': '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+      'clock': '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+      'list': '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+      'file-text': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>',
+      'folder': '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+      'file': '<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/>'
+    };
+
+    function getCategoryIcon(name) {
+      const paths = ICON_PATHS[name] || ICON_PATHS['file'];
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+    }
+
+    let docsData = null;
+    let selectedDocId = null;
+    let docsViewMode = 'browser';
+
+    // Docs view toggle
+    document.querySelectorAll('.docs-view-toggle button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.docs-view-toggle button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        docsViewMode = btn.dataset.docsView;
+
+        const browserView = document.getElementById('docsBrowserView');
+        const coverageView = document.getElementById('docsCoverageView');
+
+        browserView.classList.remove('active');
+        coverageView.classList.remove('active');
+
+        if (docsViewMode === 'browser') {
+          browserView.classList.add('active');
+        } else {
+          coverageView.classList.add('active');
+          loadCoverage();
+        }
+      });
+    });
+
+    function loadDocsTab() {
+      if (docsViewMode === 'browser') {
+        loadDocsBrowser();
+      } else {
+        loadCoverage();
+      }
+    }
+
+    async function loadDocsBrowser() {
       document.getElementById('docsLoading').style.display = 'block';
-      document.getElementById('docsContent').style.display = 'none';
+      document.getElementById('docsBrowser').style.display = 'none';
 
       try {
         const res = await api('/api/admin/docs');
-        const docs = await res.json();
-
-        if (docs.length === 0) {
-          document.getElementById('docsList').innerHTML = '';
-          document.getElementById('docsEmpty').style.display = 'block';
-        } else {
-          document.getElementById('docsEmpty').style.display = 'none';
-          document.getElementById('docsList').innerHTML = docs.map(d => `
-            <div class="doc-card">
-              <div class="doc-card-header">
-                <div class="doc-card-title">${escapeHtml(d.title)}</div>
-                <span class="doc-card-category">${escapeHtml(d.category)}</span>
-              </div>
-              <div class="doc-card-content">${escapeHtml(d.content || '(empty)')}</div>
-              <div class="doc-card-meta">
-                Last updated: ${formatDate(d.updatedAt)}
-                <div class="btn-group" style="float:right;">
-                  <button class="btn btn-outline btn-sm" onclick="openDocEditor(${d.id}, '${escapeJs(d.title)}', '${escapeJs(d.category)}', ${JSON.stringify(d.content).replace(/'/g, "\\'")})">Edit</button>
-                  <button class="btn btn-danger btn-sm" onclick="deleteDoc(${d.id}, '${escapeJs(d.title)}')">Delete</button>
-                </div>
-              </div>
-            </div>
-          `).join('');
-        }
-
+        docsData = await res.json();
+        renderDocsSidebar(docsData.categories);
         document.getElementById('docsLoading').style.display = 'none';
-        document.getElementById('docsContent').style.display = 'block';
+        document.getElementById('docsBrowser').style.display = 'flex';
+
+        let totalDocs = 0;
+        let totalCategories = docsData.categories.length;
+        docsData.categories.forEach(c => totalDocs += c.docs.length);
+
+        document.getElementById('docsWelcomeStats').innerHTML = `
+          <div class="ws"><div class="ws-val">${totalCategories}</div><div class="ws-lbl">Categories</div></div>
+          <div class="ws"><div class="ws-val">${totalDocs}</div><div class="ws-lbl">Documents</div></div>
+        `;
+
+        if (!selectedDocId) {
+          showWelcome();
+        }
       } catch (err) {
         document.getElementById('docsLoading').innerHTML = '<p style="color:var(--danger);">Failed to load docs</p>';
       }
     }
 
-    function escapeHtml(str) {
-      if (!str) return '';
-      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
+    function renderDocsSidebar(categories, filter = '') {
+      const list = document.getElementById('docsSidebarList');
+      const lowerFilter = filter.toLowerCase();
+      let html = '';
 
-    function escapeJs(str) {
-      if (!str) return '';
-      return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
-    }
+      categories.forEach(cat => {
+        const filteredDocs = lowerFilter
+          ? cat.docs.filter(d => d.title.toLowerCase().includes(lowerFilter) || d.filename.toLowerCase().includes(lowerFilter))
+          : cat.docs;
 
-    document.getElementById('newDocBtn').addEventListener('click', () => {
-      document.getElementById('docEditorTitle').textContent = 'New Document';
-      document.getElementById('docEditorId').value = '';
-      document.getElementById('docTitle').value = '';
-      document.getElementById('docCategory').value = '';
-      document.getElementById('docContent').value = '';
-      document.getElementById('docEditorModal').classList.add('active');
-    });
+        if (lowerFilter && filteredDocs.length === 0) return;
 
-    function openDocEditor(id, title, category, content) {
-      document.getElementById('docEditorTitle').textContent = 'Edit Document';
-      document.getElementById('docEditorId').value = id;
-      document.getElementById('docTitle').value = title;
-      document.getElementById('docCategory').value = category;
-      try {
-        document.getElementById('docContent').value = typeof content === 'string' ? content : JSON.parse(content);
-      } catch {
-        document.getElementById('docContent').value = content || '';
-      }
-      document.getElementById('docEditorModal').classList.add('active');
-    }
+        const collapsed = lowerFilter ? '' : '';
+        html += `
+          <div class="docs-category-header ${collapsed}" onclick="toggleCategory(this)">
+            ${getCategoryIcon(cat.icon)}
+            <span class="cat-name">${escapeHtml(cat.displayName)}</span>
+            <span class="cat-count">${filteredDocs.length}</span>
+            <svg class="cat-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+          <div class="docs-category-items ${collapsed}">
+        `;
 
-    document.getElementById('saveDocBtn').addEventListener('click', async () => {
-      const id = document.getElementById('docEditorId').value;
-      const title = document.getElementById('docTitle').value;
-      const category = document.getElementById('docCategory').value;
-      const content = document.getElementById('docContent').value;
-
-      if (!title.trim()) {
-        alert('Title is required');
-        return;
-      }
-
-      try {
-        const isNew = !id;
-        const res = await api(isNew ? '/api/admin/docs' : `/api/admin/docs/${id}`, {
-          method: isNew ? 'POST' : 'PUT',
-          body: JSON.stringify({ title, category, content }),
+        filteredDocs.forEach(doc => {
+          const activeClass = doc.id === selectedDocId ? 'active' : '';
+          html += `<div class="docs-item ${activeClass}" data-doc-id="${escapeHtml(doc.id)}" onclick="selectDoc('${escapeHtml(doc.id)}')">${escapeHtml(doc.title)}</div>`;
         });
 
-        if (res.ok) {
-          closeModal('docEditorModal');
-          loadDocs();
-        } else {
-          const data = await res.json();
-          alert(data.error || 'Failed to save document');
-        }
+        html += `</div>`;
+      });
+
+      if (!html) {
+        html = '<div class="empty-state" style="padding:24px;"><p>No matching documents found.</p></div>';
+      }
+
+      list.innerHTML = html;
+    }
+
+    function toggleCategory(el) {
+      el.classList.toggle('collapsed');
+      const items = el.nextElementSibling;
+      if (items) items.classList.toggle('collapsed');
+    }
+
+    function showWelcome() {
+      const panel = document.getElementById('docsContentPanel');
+      document.getElementById('docsWelcome').style.display = 'flex';
+      const existing = panel.querySelector('.docs-meta-bar');
+      if (existing) existing.remove();
+      const existingRendered = panel.querySelector('.docs-rendered');
+      if (existingRendered) existingRendered.remove();
+    }
+
+    async function selectDoc(docId) {
+      selectedDocId = docId;
+
+      document.querySelectorAll('.docs-item').forEach(el => {
+        el.classList.toggle('active', el.dataset.docId === docId);
+      });
+
+      const panel = document.getElementById('docsContentPanel');
+      document.getElementById('docsWelcome').style.display = 'none';
+
+      let metaBar = panel.querySelector('.docs-meta-bar');
+      let rendered = panel.querySelector('.docs-rendered');
+      if (!metaBar) {
+        metaBar = document.createElement('div');
+        metaBar.className = 'docs-meta-bar';
+        panel.appendChild(metaBar);
+      }
+      if (!rendered) {
+        rendered = document.createElement('div');
+        rendered.className = 'docs-rendered';
+        panel.appendChild(rendered);
+      }
+
+      metaBar.innerHTML = '<span>Loading...</span>';
+      rendered.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+      try {
+        const res = await api(`/api/admin/docs/${docId}`);
+        const doc = await res.json();
+
+        const sizeStr = doc.sizeBytes < 1024
+          ? doc.sizeBytes + ' B'
+          : (doc.sizeBytes / 1024).toFixed(1) + ' KB';
+
+        metaBar.innerHTML = `
+          <span>${escapeHtml(doc.relativePath)}</span>
+          <span>${sizeStr}</span>
+          <span>${formatDate(doc.modifiedAt)}</span>
+        `;
+
+        rendered.innerHTML = renderMarkdown(doc.content || '');
       } catch (err) {
-        alert('Failed to save document');
+        rendered.innerHTML = '<p style="color:var(--danger);padding:24px;">Failed to load document</p>';
+      }
+    }
+
+    function renderMarkdown(md) {
+      let html = '';
+      const lines = md.split('\n');
+      let i = 0;
+      let inList = false;
+      let listType = '';
+      let inBlockquote = false;
+
+      function closeList() {
+        if (inList) {
+          html += listType === 'ul' ? '</ul>' : '</ol>';
+          inList = false;
+          listType = '';
+        }
+      }
+
+      function closeBlockquote() {
+        if (inBlockquote) {
+          html += '</blockquote>';
+          inBlockquote = false;
+        }
+      }
+
+      function inlineFormat(text) {
+        text = escapeHtml(text);
+        text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+        text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+        text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+        return text;
+      }
+
+      while (i < lines.length) {
+        const line = lines[i];
+
+        if (line.startsWith('```')) {
+          closeList();
+          closeBlockquote();
+          const lang = line.slice(3).trim();
+          let codeLines = [];
+          i++;
+          while (i < lines.length && !lines[i].startsWith('```')) {
+            codeLines.push(lines[i]);
+            i++;
+          }
+          html += `<pre><code>${escapeHtml(codeLines.join('\n'))}</code></pre>`;
+          i++;
+          continue;
+        }
+
+        if (line.startsWith('|') && line.endsWith('|')) {
+          closeList();
+          closeBlockquote();
+          let tableLines = [];
+          while (i < lines.length && lines[i].startsWith('|') && lines[i].endsWith('|')) {
+            tableLines.push(lines[i]);
+            i++;
+          }
+          if (tableLines.length >= 2) {
+            html += '<table>';
+            const headerCells = tableLines[0].split('|').filter(c => c.trim() !== '');
+            html += '<thead><tr>' + headerCells.map(c => `<th>${inlineFormat(c.trim())}</th>`).join('') + '</tr></thead>';
+            html += '<tbody>';
+            for (let t = 2; t < tableLines.length; t++) {
+              const cells = tableLines[t].split('|').filter(c => c.trim() !== '');
+              html += '<tr>' + cells.map(c => `<td>${inlineFormat(c.trim())}</td>`).join('') + '</tr>';
+            }
+            html += '</tbody></table>';
+          }
+          continue;
+        }
+
+        if (/^#{1,4}\s/.test(line)) {
+          closeList();
+          closeBlockquote();
+          const match = line.match(/^(#{1,4})\s+(.*)/);
+          const level = match[1].length;
+          html += `<h${level}>${inlineFormat(match[2])}</h${level}>`;
+          i++;
+          continue;
+        }
+
+        if (/^---+$/.test(line.trim()) || /^\*\*\*+$/.test(line.trim()) || /^___+$/.test(line.trim())) {
+          closeList();
+          closeBlockquote();
+          html += '<hr>';
+          i++;
+          continue;
+        }
+
+        if (/^>\s?/.test(line)) {
+          closeList();
+          if (!inBlockquote) {
+            html += '<blockquote>';
+            inBlockquote = true;
+          }
+          html += `<p>${inlineFormat(line.replace(/^>\s?/, ''))}</p>`;
+          i++;
+          continue;
+        } else {
+          closeBlockquote();
+        }
+
+        const ulMatch = line.match(/^(\s*)[-*+]\s+(.*)/);
+        if (ulMatch) {
+          closeBlockquote();
+          if (!inList || listType !== 'ul') {
+            closeList();
+            html += '<ul>';
+            inList = true;
+            listType = 'ul';
+          }
+          html += `<li>${inlineFormat(ulMatch[2])}</li>`;
+          i++;
+          continue;
+        }
+
+        const olMatch = line.match(/^(\s*)\d+\.\s+(.*)/);
+        if (olMatch) {
+          closeBlockquote();
+          if (!inList || listType !== 'ol') {
+            closeList();
+            html += '<ol>';
+            inList = true;
+            listType = 'ol';
+          }
+          html += `<li>${inlineFormat(olMatch[2])}</li>`;
+          i++;
+          continue;
+        }
+
+        closeList();
+
+        if (line.trim() === '') {
+          closeBlockquote();
+          i++;
+          continue;
+        }
+
+        html += `<p>${inlineFormat(line)}</p>`;
+        i++;
+      }
+
+      closeList();
+      closeBlockquote();
+      return html;
+    }
+
+    // Search
+    document.getElementById('docSearchInput').addEventListener('input', (e) => {
+      if (docsData) {
+        renderDocsSidebar(docsData.categories, e.target.value);
       }
     });
 
-    async function deleteDoc(id, title) {
-      if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    // Sync
+    async function syncDocs() {
+      const toast = document.getElementById('syncToast');
+      const title = document.getElementById('syncToastTitle');
+      const body = document.getElementById('syncToastBody');
+
+      title.textContent = 'Syncing...';
+      body.textContent = 'Scanning routes and generating documentation...';
+      toast.classList.add('active');
 
       try {
-        const res = await api(`/api/admin/docs/${id}`, { method: 'DELETE' });
-        if (res.ok) {
-          loadDocs();
+        const res = await api('/api/admin/docs/sync', { method: 'POST' });
+        const data = await res.json();
+
+        if (data.success) {
+          title.textContent = 'Sync Complete';
+          body.textContent = `Created: ${data.summary.created} | Updated: ${data.summary.updated} | Skipped: ${data.summary.skipped} | Errors: ${data.summary.errors}`;
         } else {
-          const data = await res.json();
-          alert(data.error || 'Failed to delete document');
+          title.textContent = 'Sync Failed';
+          body.textContent = 'An error occurred during sync.';
         }
+
+        loadDocsBrowser();
       } catch (err) {
-        alert('Failed to delete document');
+        title.textContent = 'Sync Error';
+        body.textContent = 'Failed to connect to sync endpoint.';
       }
+
+      setTimeout(() => toast.classList.remove('active'), 5000);
+    }
+
+    document.getElementById('syncDocsBtn').addEventListener('click', syncDocs);
+    document.getElementById('refreshDocsBtn').addEventListener('click', () => loadDocsBrowser());
+    document.getElementById('covSyncBtn').addEventListener('click', syncDocs);
+    document.getElementById('covRefreshBtn').addEventListener('click', () => loadCoverage());
+
+    // Coverage
+    async function loadCoverage() {
+      document.getElementById('covLoading').style.display = 'block';
+      document.getElementById('covContent').style.display = 'none';
+
+      try {
+        const res = await api('/api/admin/docs/coverage');
+        const data = await res.json();
+        renderCoverage(data);
+        document.getElementById('covLoading').style.display = 'none';
+        document.getElementById('covContent').style.display = 'block';
+      } catch (err) {
+        document.getElementById('covLoading').innerHTML = '<p style="color:var(--danger);">Failed to load coverage data</p>';
+      }
+    }
+
+    function progressClass(pct) {
+      if (pct >= 80) return 'high';
+      if (pct >= 50) return 'mid';
+      return 'low';
+    }
+
+    function renderCoverage(data) {
+      const apiPct = data.api.coveragePercent || 0;
+      const funcPct = data.functional.coveragePercent || 0;
+
+      document.getElementById('covSummary').innerHTML = `
+        <div class="cov-card">
+          <div class="cov-card-title">API Coverage</div>
+          <div class="cov-card-pct">${apiPct}%</div>
+          <div class="cov-card-detail">${data.api.withDocs} of ${data.api.total} domains documented</div>
+          <div class="cov-progress"><div class="cov-progress-bar ${progressClass(apiPct)}" style="width:${apiPct}%"></div></div>
+        </div>
+        <div class="cov-card">
+          <div class="cov-card-title">Functional Coverage</div>
+          <div class="cov-card-pct">${funcPct}%</div>
+          <div class="cov-card-detail">${data.functional.withDocs} of ${data.functional.total} docs complete</div>
+          <div class="cov-progress"><div class="cov-progress-bar ${progressClass(funcPct)}" style="width:${funcPct}%"></div></div>
+        </div>
+      `;
+
+      const missingApi = (data.api.domains || []).filter(d => !d.hasDoc);
+      const missingFunc = (data.functional.docs || []).filter(d => !d.exists || d.isEmpty);
+      const allMissing = [
+        ...missingApi.map(d => d.displayName || d.domain),
+        ...missingFunc.map(d => d.name)
+      ];
+
+      if (allMissing.length > 0) {
+        document.getElementById('covMissing').style.display = 'block';
+        document.getElementById('covMissing').innerHTML = `
+          <div class="cov-missing-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Missing or Incomplete (${allMissing.length})
+          </div>
+          <div class="cov-missing-list">
+            ${allMissing.map(n => `<span class="cov-missing-item">${escapeHtml(n)}</span>`).join('')}
+          </div>
+        `;
+      } else {
+        document.getElementById('covMissing').style.display = 'none';
+      }
+
+      let apiRows = '';
+      (data.api.domains || []).forEach(d => {
+        let status = 'miss', icon = '!';
+        if (d.hasDoc && d.hasAuth && d.hasExamples) { status = 'ok'; icon = '\u2713'; }
+        else if (d.hasDoc) { status = 'warn'; icon = '~'; }
+
+        apiRows += `
+          <div class="cov-detail-row">
+            <div class="cov-status-icon ${status}">${icon}</div>
+            <div class="cov-detail-name">${escapeHtml(d.displayName || d.domain)}</div>
+            <div class="cov-detail-meta">${d.endpointCount} endpoints</div>
+          </div>
+        `;
+      });
+
+      let funcRows = '';
+      (data.functional.docs || []).forEach(d => {
+        let status = 'miss', icon = '!';
+        if (d.exists && !d.isEmpty) { status = 'ok'; icon = '\u2713'; }
+        else if (d.exists) { status = 'warn'; icon = '~'; }
+
+        funcRows += `
+          <div class="cov-detail-row">
+            <div class="cov-status-icon ${status}">${icon}</div>
+            <div class="cov-detail-name">${escapeHtml(d.name)}</div>
+            <div class="cov-detail-meta">${d.wordCount} words</div>
+          </div>
+        `;
+      });
+
+      document.getElementById('covDetails').innerHTML = `
+        <div class="cov-detail-card">
+          <div class="cov-detail-header">API Domains</div>
+          <div class="cov-detail-list">${apiRows || '<div class="empty-state" style="padding:16px;">No API domains found</div>'}</div>
+        </div>
+        <div class="cov-detail-card">
+          <div class="cov-detail-header">Functional Docs</div>
+          <div class="cov-detail-list">${funcRows || '<div class="empty-state" style="padding:16px;">No functional docs found</div>'}</div>
+        </div>
+      `;
     }
 
     // Init
