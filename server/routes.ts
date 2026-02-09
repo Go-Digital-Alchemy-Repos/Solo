@@ -465,6 +465,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/solos/:soloId", async (req, res) => {
+    const userId = await requireAuth(req, res);
+    if (!userId) return;
+
+    try {
+      const { soloId } = req.params;
+      const [solo] = await db.select().from(solos).where(eq(solos.id, soloId)).limit(1);
+      if (!solo) {
+        return res.status(404).json({ error: "Solo not found" });
+      }
+      if (solo.userId !== userId) {
+        return res.status(403).json({ error: "You can only delete your own solos" });
+      }
+
+      const audioFileId = solo.audioUrl.replace("/api/audio/", "");
+      const filePath = path.join(UPLOADS_DIR, `${audioFileId}.m4a`);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+
+      await db.delete(solos).where(eq(solos.id, soloId));
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting solo:", error);
+      return res.status(500).json({ error: "Failed to delete solo" });
+    }
+  });
+
+  app.put("/api/solos/:soloId", async (req, res) => {
+    const userId = await requireAuth(req, res);
+    if (!userId) return;
+
+    try {
+      const { soloId } = req.params;
+      const [solo] = await db.select().from(solos).where(eq(solos.id, soloId)).limit(1);
+      if (!solo) {
+        return res.status(404).json({ error: "Solo not found" });
+      }
+      if (solo.userId !== userId) {
+        return res.status(403).json({ error: "You can only edit your own solos" });
+      }
+
+      const { title, tags } = req.body;
+      const updates: Record<string, any> = {};
+      if (title !== undefined) updates.title = title;
+      if (tags !== undefined) updates.tags = Array.isArray(tags) ? tags : JSON.parse(tags);
+
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: "Nothing to update" });
+      }
+
+      const [updated] = await db
+        .update(solos)
+        .set(updates)
+        .where(eq(solos.id, soloId))
+        .returning();
+
+      return res.json(updated);
+    } catch (error) {
+      console.error("Error updating solo:", error);
+      return res.status(500).json({ error: "Failed to update solo" });
+    }
+  });
+
   app.get("/api/solos/user/:userId", async (req, res) => {
     try {
       const { userId } = req.params;
