@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useMemo } from 'react';
-import { StyleSheet, View, Text, Pressable, FlatList, Platform, Alert, TextInput as RNTextInput, ActivityIndicator, RefreshControl, Modal } from 'react-native';
+import { StyleSheet, View, Pressable, FlatList, Platform, Alert, TextInput as RNTextInput, ActivityIndicator, RefreshControl, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -7,6 +7,8 @@ import * as Haptics from 'expo-haptics';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
+import { Spacing, Radius, FontSize, FontFamily } from '@/constants/theme';
+import { Text, EmptyState } from '@/components/ui';
 import Avatar from '@/components/Avatar';
 import SoundCard from '@/components/SoundCard';
 import SoloHeader from '@/components/SoloHeader';
@@ -349,7 +351,7 @@ export default function ProfileScreen() {
       {isEditing ? (
         <View style={styles.editSection}>
           <View style={styles.editField}>
-            <Text style={styles.editLabel}>Username</Text>
+            <Text variant="overline" color={Colors.accent}>Username</Text>
             <RNTextInput
               style={styles.editInput}
               value={editUsername}
@@ -359,7 +361,7 @@ export default function ProfileScreen() {
             />
           </View>
           <View style={styles.editField}>
-            <Text style={styles.editLabel}>Bio</Text>
+            <Text variant="overline" color={Colors.accent}>Bio</Text>
             <RNTextInput
               style={[styles.editInput, { minHeight: 60 }]}
               value={editBio}
@@ -371,35 +373,35 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.editActions}>
             <Pressable onPress={() => { setIsEditing(false); setEditAvatarUri(null); }} style={styles.cancelBtn}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
+              <Text variant="label" color={Colors.textDim}>Cancel</Text>
             </Pressable>
             <Pressable onPress={saveEdits} style={[styles.saveBtn, saving && { opacity: 0.7 }]} disabled={saving}>
-              {saving ? <ActivityIndicator color={Colors.bg} size="small" /> : <Text style={styles.saveBtnText}>Save</Text>}
+              {saving ? <ActivityIndicator color={Colors.bg} size="small" /> : <Text variant="label" color={Colors.bg} bold>Save</Text>}
             </Pressable>
           </View>
         </View>
       ) : (
         <>
-          <Text style={styles.displayName}>{currentUser.displayName}</Text>
-          <Text style={styles.username}>@{currentUser.username}</Text>
-          {!!currentUser.bio && <Text style={styles.bio}>{currentUser.bio}</Text>}
+          <Text variant="h2">{currentUser.displayName}</Text>
+          <Text variant="body" color={Colors.textDim} style={{ marginTop: 2 }}>@{currentUser.username}</Text>
+          {!!currentUser.bio && <Text variant="body" color={Colors.textDim} align="center" style={styles.bio}>{currentUser.bio}</Text>}
         </>
       )}
 
       <View style={styles.statsRow}>
         <View style={styles.stat}>
-          <Text style={styles.statNumber} testID="post-count">{postCount}</Text>
-          <Text style={styles.statLabel}>Sounds</Text>
+          <Text variant="h3" testID="post-count">{postCount}</Text>
+          <Text variant="caption" color={Colors.textMuted} style={{ marginTop: 2 }}>Sounds</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.stat}>
-          <Text style={styles.statNumber}>{currentUser.followerCount}</Text>
-          <Text style={styles.statLabel}>Followers</Text>
+          <Text variant="h3">{currentUser.followerCount}</Text>
+          <Text variant="caption" color={Colors.textMuted} style={{ marginTop: 2 }}>Followers</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.stat}>
-          <Text style={styles.statNumber}>{currentUser.followingCount}</Text>
-          <Text style={styles.statLabel}>Following</Text>
+          <Text variant="h3">{currentUser.followingCount}</Text>
+          <Text variant="caption" color={Colors.textMuted} style={{ marginTop: 2 }}>Following</Text>
         </View>
       </View>
 
@@ -413,7 +415,7 @@ export default function ProfileScreen() {
             style={styles.editBtn}
           >
             <Feather name="edit-2" size={16} color={Colors.accent} />
-            <Text style={styles.editBtnText}>Edit Profile</Text>
+            <Text variant="label" color={Colors.accent}>Edit Profile</Text>
           </Pressable>
           <Pressable onPress={handleLogout} style={styles.logoutBtn} testID="logout-btn">
             <Ionicons name="log-out-outline" size={18} color={Colors.danger} />
@@ -421,7 +423,7 @@ export default function ProfileScreen() {
         </View>
       )}
 
-      <Text style={styles.sectionTitle}>My Solos</Text>
+      <Text variant="h3" style={styles.sectionTitle}>My Solos</Text>
     </View>
   );
 
@@ -448,7 +450,7 @@ export default function ProfileScreen() {
             testID="edit-solo-btn"
           >
             <Feather name="edit-2" size={16} color={Colors.text} />
-            <Text style={pStyles.menuItemText}>Edit</Text>
+            <Text variant="body">Edit</Text>
           </Pressable>
           <View style={pStyles.menuDivider} />
           <Pressable
@@ -457,7 +459,7 @@ export default function ProfileScreen() {
             testID="delete-solo-btn"
           >
             <Ionicons name="trash-outline" size={16} color={Colors.danger} />
-            <Text style={[pStyles.menuItemText, { color: Colors.danger }]}>Delete</Text>
+            <Text variant="body" color={Colors.danger}>Delete</Text>
           </Pressable>
         </View>
       )}
@@ -492,11 +494,11 @@ export default function ProfileScreen() {
               <ActivityIndicator color={Colors.accent} size="large" />
             </View>
           ) : (
-            <View style={styles.empty}>
-              <Ionicons name="musical-notes-outline" size={48} color={Colors.textMuted} />
-              <Text style={styles.emptyText}>No sounds recorded yet</Text>
-              <Text style={styles.emptySubtext}>Head to the Record tab to create your first sound</Text>
-            </View>
+            <EmptyState
+              icon={<Ionicons name="musical-notes-outline" size={28} color={Colors.accent} />}
+              title="No sounds recorded yet"
+              message="Head to the Record tab to create your first sound"
+            />
           )
         }
       />
@@ -510,13 +512,13 @@ export default function ProfileScreen() {
         <Pressable style={pStyles.modalOverlay} onPress={() => setEditingSoloId(null)}>
           <Pressable style={pStyles.modalContent} onPress={(e) => e.stopPropagation()} testID="edit-solo-modal">
             <View style={pStyles.modalHeader}>
-              <Text style={pStyles.modalTitle}>Edit Solo</Text>
+              <Text variant="h3">Edit Solo</Text>
               <Pressable onPress={() => setEditingSoloId(null)} hitSlop={12}>
                 <Ionicons name="close" size={24} color={Colors.textDim} />
               </Pressable>
             </View>
 
-            <Text style={pStyles.fieldLabel}>Title</Text>
+            <Text variant="overline" color={Colors.accent} style={{ marginBottom: 6 }}>Title</Text>
             <RNTextInput
               style={pStyles.titleInput}
               value={editSoloTitle}
@@ -526,7 +528,7 @@ export default function ProfileScreen() {
               maxLength={100}
             />
 
-            <Text style={[pStyles.fieldLabel, { marginTop: 16 }]}>Categories</Text>
+            <Text variant="overline" color={Colors.accent} style={{ marginTop: Spacing.lg, marginBottom: 6 }}>Categories</Text>
             <View style={pStyles.tagsWrap}>
               {CATEGORY_OPTIONS.map(tag => (
                 <Pressable
@@ -534,7 +536,7 @@ export default function ProfileScreen() {
                   onPress={() => toggleEditTag(tag)}
                   style={[pStyles.tagChip, editSoloTags.includes(tag) && pStyles.tagChipActive]}
                 >
-                  <Text style={[pStyles.tagText, editSoloTags.includes(tag) && pStyles.tagTextActive]}>
+                  <Text variant="bodySmall" color={editSoloTags.includes(tag) ? Colors.accent : Colors.textDim}>
                     {tag}
                   </Text>
                 </Pressable>
@@ -546,7 +548,7 @@ export default function ProfileScreen() {
                 onPress={() => setEditingSoloId(null)}
                 style={pStyles.modalCancelBtn}
               >
-                <Text style={pStyles.modalCancelText}>Cancel</Text>
+                <Text variant="label" color={Colors.textDim}>Cancel</Text>
               </Pressable>
               <Pressable
                 onPress={handleSaveEditSolo}
@@ -556,7 +558,7 @@ export default function ProfileScreen() {
                 {savingSolo ? (
                   <ActivityIndicator size="small" color={Colors.bg} />
                 ) : (
-                  <Text style={pStyles.modalSaveText}>Save</Text>
+                  <Text variant="label" color={Colors.bg} bold>Save</Text>
                 )}
               </Pressable>
             </View>
@@ -574,12 +576,12 @@ const styles = StyleSheet.create({
   },
   profileSection: {
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.lg,
   },
   avatarContainer: {
     position: 'relative',
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   cameraIcon: {
     position: 'absolute',
@@ -594,45 +596,18 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.bg,
   },
-  displayName: {
-    color: Colors.text,
-    fontSize: 22,
-    fontFamily: 'DMSans_700Bold',
-  },
-  username: {
-    color: Colors.textDim,
-    fontSize: 15,
-    fontFamily: 'DMSans_400Regular',
-    marginTop: 2,
-  },
   bio: {
-    color: Colors.textDim,
-    fontSize: 14,
-    fontFamily: 'DMSans_400Regular',
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
-    paddingHorizontal: 20,
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.xl,
   },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 20,
-    gap: 20,
+    marginTop: Spacing.xl,
+    gap: Spacing.xl,
   },
   stat: {
     alignItems: 'center',
-  },
-  statNumber: {
-    color: Colors.text,
-    fontSize: 20,
-    fontFamily: 'DMSans_700Bold',
-  },
-  statLabel: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: 'DMSans_400Regular',
-    marginTop: 2,
   },
   statDivider: {
     width: 1,
@@ -642,28 +617,23 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginTop: 16,
+    gap: Spacing.md,
+    marginTop: Spacing.lg,
   },
   editBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 20,
+    paddingHorizontal: Spacing.xl,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: Colors.accent,
-  },
-  editBtnText: {
-    color: Colors.accent,
-    fontSize: 14,
-    fontFamily: 'DMSans_600SemiBold',
   },
   logoutBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: 'rgba(255, 68, 68, 0.3)',
     alignItems: 'center',
@@ -671,86 +641,55 @@ const styles = StyleSheet.create({
   },
   editSection: {
     width: '100%',
-    marginTop: 4,
-    padding: 16,
+    marginTop: Spacing.xs,
+    padding: Spacing.lg,
     backgroundColor: Colors.surface,
-    borderRadius: 16,
-    gap: 12,
+    borderRadius: Radius.lg,
+    gap: Spacing.md,
   },
   editField: {
-    gap: 4,
-  },
-  editLabel: {
-    color: Colors.accent,
-    fontSize: 12,
-    fontFamily: 'DMSans_600SemiBold',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
+    gap: Spacing.xs,
   },
   editInput: {
     backgroundColor: Colors.surfaceLight,
-    borderRadius: 10,
-    paddingHorizontal: 14,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.md,
     paddingVertical: 10,
     color: Colors.text,
-    fontSize: 15,
-    fontFamily: 'DMSans_400Regular',
+    fontSize: FontSize.lg,
+    fontFamily: FontFamily.regular,
   },
   editActions: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 4,
+    gap: Spacing.md,
+    marginTop: Spacing.xs,
   },
   cancelBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.sm,
     borderWidth: 1,
     borderColor: Colors.textMuted,
     alignItems: 'center',
   },
-  cancelBtnText: {
-    color: Colors.textDim,
-    fontSize: 14,
-    fontFamily: 'DMSans_600SemiBold',
-  },
   saveBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.sm,
     backgroundColor: Colors.accent,
     alignItems: 'center',
   },
-  saveBtnText: {
-    color: Colors.bg,
-    fontSize: 14,
-    fontFamily: 'DMSans_700Bold',
-  },
   sectionTitle: {
-    color: Colors.text,
-    fontSize: 18,
-    fontFamily: 'DMSans_700Bold',
     alignSelf: 'flex-start',
-    marginTop: 24,
-    marginBottom: 12,
+    marginTop: Spacing.xxl,
+    marginBottom: Spacing.md,
   },
   empty: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 30,
     paddingHorizontal: 40,
-    gap: 8,
-  },
-  emptyText: {
-    color: Colors.textDim,
-    fontSize: 16,
-    fontFamily: 'DMSans_500Medium',
-  },
-  emptySubtext: {
-    color: Colors.textMuted,
-    fontSize: 14,
-    fontFamily: 'DMSans_400Regular',
-    textAlign: 'center',
+    gap: Spacing.sm,
   },
 });
 
@@ -758,18 +697,18 @@ const pStyles = StyleSheet.create({
   menuRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
     paddingBottom: 0,
   },
   menuBtn: {
     padding: 6,
   },
   menuDropdown: {
-    marginHorizontal: 16,
-    marginBottom: 4,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.xs,
     backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     overflow: 'hidden',
@@ -778,30 +717,25 @@ const pStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing.lg,
     paddingVertical: 14,
-  },
-  menuItemText: {
-    color: Colors.text,
-    fontSize: 15,
-    fontFamily: 'DMSans_500Medium',
   },
   menuDivider: {
     height: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    marginHorizontal: 12,
+    marginHorizontal: Spacing.md,
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: Spacing.xxl,
   },
   modalContent: {
     backgroundColor: Colors.surface,
-    borderRadius: 20,
-    padding: 24,
+    borderRadius: Radius.xl,
+    padding: Spacing.xxl,
     width: '100%',
     maxWidth: 400,
     borderWidth: 1,
@@ -811,40 +745,27 @@ const pStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    color: Colors.text,
-    fontSize: 20,
-    fontFamily: 'DMSans_700Bold',
-  },
-  fieldLabel: {
-    color: Colors.accent,
-    fontSize: 12,
-    fontFamily: 'DMSans_600SemiBold',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
-    marginBottom: 6,
+    marginBottom: Spacing.xl,
   },
   titleInput: {
     backgroundColor: Colors.surfaceLight,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
     color: Colors.text,
-    fontSize: 16,
-    fontFamily: 'DMSans_400Regular',
+    fontSize: FontSize.lg,
+    fontFamily: FontFamily.regular,
   },
   tagsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 4,
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
   },
   tagChip: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.pill,
     backgroundColor: Colors.surfaceLight,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
@@ -853,42 +774,24 @@ const pStyles = StyleSheet.create({
     backgroundColor: 'rgba(255, 215, 0, 0.15)',
     borderColor: Colors.accent,
   },
-  tagText: {
-    color: Colors.textDim,
-    fontSize: 13,
-    fontFamily: 'DMSans_500Medium',
-  },
-  tagTextActive: {
-    color: Colors.accent,
-  },
   modalActions: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 24,
+    gap: Spacing.md,
+    marginTop: Spacing.xxl,
   },
   modalCancelBtn: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Colors.textMuted,
     alignItems: 'center',
   },
-  modalCancelText: {
-    color: Colors.textDim,
-    fontSize: 15,
-    fontFamily: 'DMSans_600SemiBold',
-  },
   modalSaveBtn: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     backgroundColor: Colors.accent,
     alignItems: 'center',
-  },
-  modalSaveText: {
-    color: Colors.bg,
-    fontSize: 15,
-    fontFamily: 'DMSans_700Bold',
   },
 });
