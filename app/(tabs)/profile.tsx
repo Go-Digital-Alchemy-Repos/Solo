@@ -426,7 +426,7 @@ export default function ProfileScreen() {
   );
 
   const renderPostItem = useCallback(({ item }: { item: AudioPost }) => (
-    <View>
+    <View style={{ zIndex: menuPostId === item.id ? 10 : 0 }}>
       <View style={pStyles.menuRow}>
         <Pressable
           onPress={() => {
@@ -445,6 +445,7 @@ export default function ProfileScreen() {
           <Pressable
             onPress={() => handleStartEditSolo(item.id)}
             style={pStyles.menuItem}
+            testID="edit-solo-btn"
           >
             <Feather name="edit-2" size={16} color={Colors.text} />
             <Text style={pStyles.menuItemText}>Edit</Text>
@@ -453,6 +454,7 @@ export default function ProfileScreen() {
           <Pressable
             onPress={() => handleDeleteSolo(item.id)}
             style={pStyles.menuItem}
+            testID="delete-solo-btn"
           >
             <Ionicons name="trash-outline" size={16} color={Colors.danger} />
             <Text style={[pStyles.menuItemText, { color: Colors.danger }]}>Delete</Text>
@@ -506,7 +508,7 @@ export default function ProfileScreen() {
         onRequestClose={() => setEditingSoloId(null)}
       >
         <Pressable style={pStyles.modalOverlay} onPress={() => setEditingSoloId(null)}>
-          <Pressable style={pStyles.modalContent} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={pStyles.modalContent} onPress={(e) => e.stopPropagation()} testID="edit-solo-modal">
             <View style={pStyles.modalHeader}>
               <Text style={pStyles.modalTitle}>Edit Solo</Text>
               <Pressable onPress={() => setEditingSoloId(null)} hitSlop={12}>
