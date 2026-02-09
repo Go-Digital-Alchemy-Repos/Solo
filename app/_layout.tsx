@@ -12,6 +12,7 @@ import { queryClient } from "@/lib/query-client";
 import { PlaybackProvider } from "@/lib/playback-provider";
 import { DataProvider } from "@/lib/data-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { ToastProvider } from "@/components/ui";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -86,8 +87,10 @@ export default function RootLayout() {
               <AuthProvider>
                 <DataProvider>
                   <PlaybackProvider>
-                    <StatusBar style="light" />
-                    <RootLayoutNav />
+                    <ToastProvider>
+                      <StatusBar style="light" />
+                      <RootLayoutNav />
+                    </ToastProvider>
                   </PlaybackProvider>
                 </DataProvider>
               </AuthProvider>

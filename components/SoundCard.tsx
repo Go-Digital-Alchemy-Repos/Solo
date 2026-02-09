@@ -1,9 +1,11 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput, FlatList, Platform, ActivityIndicator, PanResponder, LayoutChangeEvent } from 'react-native';
+import { View, StyleSheet, Pressable, TextInput, FlatList, Platform, ActivityIndicator, PanResponder, LayoutChangeEvent } from 'react-native';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { useAnimatedStyle, withSpring, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import Colors from '@/constants/colors';
+import { Spacing, Radius, FontSize, FontFamily, HitSlop } from '@/constants/theme';
+import { Text } from '@/components/ui';
 import Avatar from './Avatar';
 import WaveformBars from './WaveformBars';
 import LyricView from './LyricView';
@@ -180,10 +182,10 @@ export default function SoundCard({ post }: SoundCardProps) {
       <View style={styles.header}>
         <Avatar uri={post.avatarUri} size={40} />
         <View style={styles.headerInfo}>
-          <Text style={styles.displayName}>{post.displayName}</Text>
-          <Text style={styles.username}>@{post.username}</Text>
+          <Text variant="bodySmall" bold>{post.displayName}</Text>
+          <Text variant="caption" color={Colors.textDim}>@{post.username}</Text>
         </View>
-        <Text style={styles.timeAgo}>{formatTimeAgo(post.createdAt)}</Text>
+        <Text variant="caption" color={Colors.textMuted} style={styles.timeAgo}>{formatTimeAgo(post.createdAt)}</Text>
         {post.userId !== 'me' && (
           <Pressable
             onPress={() => {
@@ -192,18 +194,18 @@ export default function SoundCard({ post }: SoundCardProps) {
             }}
             style={[styles.followBtn, isFollowing && styles.followBtnActive]}
           >
-            <Text style={[styles.followBtnText, isFollowing && styles.followBtnTextActive]}>
+            <Text variant="label" color={isFollowing ? Colors.bg : Colors.accent} style={{ fontSize: FontSize.sm }}>
               {isFollowing ? 'Following' : 'Follow'}
             </Text>
           </Pressable>
         )}
       </View>
 
-      <Text style={styles.title}>{post.title}</Text>
+      <Text variant="h3" style={styles.title}>{post.title}</Text>
       {post.isRSS && (
         <View style={styles.rssBadge}>
           <Ionicons name="radio" size={12} color={Colors.accent} />
-          <Text style={styles.rssBadgeText}>RSS Feed</Text>
+          <Text variant="overline" color={Colors.accent}>RSS Feed</Text>
         </View>
       )}
 
@@ -246,11 +248,11 @@ export default function SoundCard({ post }: SoundCardProps) {
           />
         </Pressable>
         <View style={styles.timeInfo}>
-          <Text style={styles.timeText}>
+          <Text variant="caption" color={Colors.textDim} style={styles.timeText}>
             {formatTime(displayPositionMs)}
           </Text>
-          <Text style={styles.timeSeparator}>/</Text>
-          <Text style={styles.timeText}>
+          <Text variant="caption" color={Colors.textMuted} style={{ marginHorizontal: 2 }}>/</Text>
+          <Text variant="caption" color={Colors.textDim} style={styles.timeText}>
             {formatTime(post.durationMs)}
           </Text>
         </View>
@@ -268,7 +270,7 @@ export default function SoundCard({ post }: SoundCardProps) {
         {post.isRSS && !fullMode && (
           <Pressable onPress={handleListenFull} style={styles.fullBtn}>
             <Feather name="headphones" size={14} color={Colors.accent} />
-            <Text style={styles.fullBtnText}>Full Episode</Text>
+            <Text variant="label" color={Colors.accent} style={{ fontSize: FontSize.sm }}>Full Episode</Text>
           </Pressable>
         )}
       </View>
@@ -282,7 +284,7 @@ export default function SoundCard({ post }: SoundCardProps) {
               color={post.liked ? '#FF4444' : Colors.textDim}
             />
           </Animated.View>
-          <Text style={[styles.socialCount, post.liked && { color: '#FF4444' }]}>
+          <Text variant="body" color={post.liked ? '#FF4444' : Colors.textDim}>
             {post.likes}
           </Text>
         </Pressable>
@@ -296,7 +298,7 @@ export default function SoundCard({ post }: SoundCardProps) {
             size={20}
             color={showComments ? Colors.accent : Colors.textDim}
           />
-          <Text style={[styles.socialCount, showComments && { color: Colors.accent }]}>
+          <Text variant="body" color={showComments ? Colors.accent : Colors.textDim}>
             {post.comments.length}
           </Text>
         </Pressable>
@@ -312,8 +314,8 @@ export default function SoundCard({ post }: SoundCardProps) {
             <View key={comment.id} style={styles.commentRow}>
               <Avatar uri={comment.avatarUri} size={28} borderWidth={1} showBorder={false} />
               <View style={styles.commentContent}>
-                <Text style={styles.commentUsername}>@{comment.username}</Text>
-                <Text style={styles.commentText}>{comment.text}</Text>
+                <Text variant="label" color={Colors.accent} style={{ fontSize: FontSize.sm, marginBottom: 2 }}>@{comment.username}</Text>
+                <Text variant="body">{comment.text}</Text>
               </View>
             </View>
           ))}
@@ -343,44 +345,31 @@ export default function SoundCard({ post }: SoundCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: 'rgba(17, 17, 17, 0.5)',
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 12,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   headerInfo: {
     flex: 1,
-    marginLeft: 10,
-  },
-  displayName: {
-    color: Colors.text,
-    fontSize: 15,
-    fontFamily: 'DMSans_700Bold',
-  },
-  username: {
-    color: '#888888',
-    fontSize: 12,
-    fontFamily: 'DMSans_400Regular',
+    marginLeft: Spacing.sm,
   },
   timeAgo: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: 'DMSans_400Regular',
-    marginRight: 8,
+    marginRight: Spacing.sm,
   },
   followBtn: {
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: Colors.accent,
   },
@@ -388,44 +377,25 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accent,
     borderColor: Colors.accent,
   },
-  followBtnText: {
-    color: Colors.accent,
-    fontSize: 12,
-    fontFamily: 'DMSans_600SemiBold',
-  },
-  followBtnTextActive: {
-    color: Colors.bg,
-  },
   title: {
-    color: Colors.text,
-    fontSize: 18,
-    fontFamily: 'DMSans_700Bold',
-    marginBottom: 8,
-    letterSpacing: -0.3,
+    marginBottom: Spacing.sm,
   },
   rssBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 10,
-  },
-  rssBadgeText: {
-    color: Colors.accent,
-    fontSize: 11,
-    fontFamily: 'DMSans_500Medium',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 0.5,
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
   },
   waveformContainer: {
-    marginBottom: 8,
-    marginHorizontal: -16,
+    marginBottom: Spacing.sm,
+    marginHorizontal: -Spacing.lg,
     paddingHorizontal: 0,
     overflow: 'hidden',
   },
   scrubberTrack: {
     height: 24,
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
     position: 'relative',
   },
   scrubberBg: {
@@ -455,13 +425,13 @@ const styles = StyleSheet.create({
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    gap: 12,
+    marginBottom: Spacing.md,
+    gap: Spacing.md,
   },
   playBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: Radius.pill,
     backgroundColor: Colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
@@ -471,15 +441,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   timeText: {
-    color: Colors.textDim,
-    fontSize: 13,
-    fontFamily: 'DMSans_500Medium',
     fontVariant: ['tabular-nums'],
-  },
-  timeSeparator: {
-    color: Colors.textMuted,
-    fontSize: 13,
-    marginHorizontal: 2,
   },
   transcriptBtn: {
     marginLeft: 'auto' as const,
@@ -494,77 +456,55 @@ const styles = StyleSheet.create({
   fullBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.accent,
-  },
-  fullBtnText: {
-    color: Colors.accent,
-    fontSize: 12,
-    fontFamily: 'DMSans_600SemiBold',
   },
   socialBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: Spacing.md,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.06)',
-    gap: 20,
+    gap: Spacing.xl,
   },
   socialBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  socialCount: {
-    color: Colors.textDim,
-    fontSize: 14,
-    fontFamily: 'DMSans_500Medium',
-  },
   commentsSection: {
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: Spacing.md,
+    paddingTop: Spacing.md,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.06)',
   },
   commentRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 10,
-    gap: 8,
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
   },
   commentContent: {
     flex: 1,
   },
-  commentUsername: {
-    color: Colors.accent,
-    fontSize: 12,
-    fontFamily: 'DMSans_600SemiBold',
-    marginBottom: 2,
-  },
-  commentText: {
-    color: Colors.text,
-    fontSize: 14,
-    fontFamily: 'DMSans_400Regular',
-    lineHeight: 20,
-  },
   commentInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 4,
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
   },
   commentInput: {
     flex: 1,
     backgroundColor: Colors.surfaceLight,
-    borderRadius: 20,
+    borderRadius: Radius.pill,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: Spacing.sm,
     color: Colors.text,
-    fontSize: 14,
-    fontFamily: 'DMSans_400Regular',
+    fontSize: FontSize.md,
+    fontFamily: FontFamily.regular,
   },
 });

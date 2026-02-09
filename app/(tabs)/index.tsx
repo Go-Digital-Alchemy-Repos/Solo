@@ -1,8 +1,9 @@
 import React, { useCallback, useState } from 'react';
-import { StyleSheet, FlatList, View, Text, Platform, StatusBar, RefreshControl } from 'react-native';
+import { StyleSheet, FlatList, View, Platform, StatusBar, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
+import { EmptyState } from '@/components/ui';
 import SoundCard from '@/components/SoundCard';
 import SoloHeader from '@/components/SoloHeader';
 import FeedTopicBar from '@/components/FeedTopicBar';
@@ -42,13 +43,11 @@ export default function FeedScreen() {
           />
         }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="mic-outline" size={48} color={Colors.textMuted} />
-            <Text style={styles.emptyTitle}>No solos yet</Text>
-            <Text style={styles.emptyText}>
-              {feedTag ? `No solos in ${feedTag} yet` : 'Record your first solo to get started'}
-            </Text>
-          </View>
+          <EmptyState
+            icon={<Ionicons name="mic-outline" size={28} color={Colors.accent} />}
+            title="No solos yet"
+            message={feedTag ? `No solos in ${feedTag} yet` : 'Record your first solo to get started'}
+          />
         }
       />
       <SoloHeader
@@ -65,21 +64,5 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.bg,
-  },
-  empty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 120,
-    gap: 8,
-  },
-  emptyTitle: {
-    color: Colors.textDim,
-    fontSize: 18,
-    fontFamily: 'DMSans_700Bold',
-  },
-  emptyText: {
-    color: Colors.textMuted,
-    fontSize: 14,
-    fontFamily: 'DMSans_400Regular',
   },
 });

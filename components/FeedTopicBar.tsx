@@ -1,7 +1,9 @@
 import React, { useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
+import { Spacing, Radius, FontSize, FontFamily } from '@/constants/theme';
+import { Text } from '@/components/ui';
 
 const TOPICS = [
   { key: null, label: 'Trending' },
@@ -48,7 +50,10 @@ export default function FeedTopicBar({ selectedTag, onSelectTag }: FeedTopicBarP
               onPress={() => handlePress(topic.key)}
               style={[styles.chip, isActive && styles.chipActive]}
             >
-              <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
+              <Text
+                variant="label"
+                color={isActive ? Colors.bg : Colors.textDim}
+              >
                 {topic.label}
               </Text>
             </Pressable>
@@ -62,16 +67,16 @@ export default function FeedTopicBar({ selectedTag, onSelectTag }: FeedTopicBarP
 const styles = StyleSheet.create({
   container: {
     paddingTop: 2,
-    paddingBottom: 8,
+    paddingBottom: Spacing.sm,
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    gap: 8,
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
   },
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.pill,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
@@ -79,13 +84,5 @@ const styles = StyleSheet.create({
   chipActive: {
     backgroundColor: Colors.accent,
     borderColor: Colors.accent,
-  },
-  chipText: {
-    color: Colors.textDim,
-    fontSize: 13,
-    fontFamily: 'DMSans_600SemiBold',
-  },
-  chipTextActive: {
-    color: Colors.bg,
   },
 });

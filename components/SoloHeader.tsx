@@ -1,8 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
+import { Spacing, FontFamily, FontSize } from '@/constants/theme';
+import { Text } from '@/components/ui';
 
 interface SoloHeaderProps {
   absolute?: boolean;
@@ -18,12 +20,14 @@ export default function SoloHeader({ absolute = false, children, bottomContent }
     <View style={[
       styles.container,
       absolute && styles.absolute,
-      { paddingTop: topInset + 4 },
+      { paddingTop: topInset + Spacing.xs },
     ]}>
       <View style={styles.row}>
         <View style={styles.logoRow}>
           <Ionicons name="mic" size={22} color={Colors.accent} />
-          <Text style={styles.logoText}>Solo</Text>
+          <Text variant="h1" color={Colors.accent} style={styles.logoText}>
+            Solo
+          </Text>
         </View>
         {children && <View style={styles.right}>{children}</View>}
       </View>
@@ -36,7 +40,7 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: 'rgba(0, 0, 0, 0.92)',
     paddingHorizontal: 0,
-    paddingBottom: 4,
+    paddingBottom: Spacing.xs,
     zIndex: 10,
   },
   absolute: {
@@ -49,7 +53,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: Spacing.xl,
   },
   logoRow: {
     flexDirection: 'row',
@@ -58,8 +62,6 @@ const styles = StyleSheet.create({
   },
   logoText: {
     fontSize: 26,
-    fontFamily: 'DMSans_700Bold',
-    color: Colors.accent,
     letterSpacing: -0.5,
   },
   right: {

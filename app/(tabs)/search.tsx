@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { StyleSheet, View, Text, TextInput, FlatList, Pressable, Platform } from 'react-native';
+import { StyleSheet, View, TextInput, FlatList, Pressable, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
+import { Spacing, Radius, FontSize, FontFamily } from '@/constants/theme';
+import { Text, EmptyState } from '@/components/ui';
 import Avatar from '@/components/Avatar';
 import SoundCard from '@/components/SoundCard';
 import SoloHeader from '@/components/SoloHeader';
@@ -42,14 +44,14 @@ export default function SearchScreen() {
         <View style={styles.userRow}>
           <Avatar uri={user.avatarUri} size={44} />
           <View style={styles.userInfo}>
-            <Text style={styles.userDisplayName}>{user.displayName}</Text>
-            <Text style={styles.userUsername}>@{user.username}</Text>
+            <Text variant="body" bold>{user.displayName}</Text>
+            <Text variant="caption" color={Colors.textDim}>@{user.username}</Text>
           </View>
           <Pressable
             onPress={() => toggleFollow(user.id)}
             style={[styles.followBtn, isFollowing && styles.followBtnActive]}
           >
-            <Text style={[styles.followText, isFollowing && styles.followTextActive]}>
+            <Text variant="label" color={isFollowing ? Colors.bg : Colors.accent} style={{ fontSize: FontSize.sm }}>
               {isFollowing ? 'Following' : 'Follow'}
             </Text>
           </Pressable>
@@ -88,7 +90,7 @@ export default function SearchScreen() {
                 onPress={() => setActiveTab(tab)}
                 style={[styles.tab, activeTab === tab && styles.tabActive]}
               >
-                <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+                <Text variant="label" color={activeTab === tab ? Colors.bg : Colors.textDim}>
                   {tab.charAt(0).toUpperCase() + tab.slice(1)}
                 </Text>
               </Pressable>
@@ -100,22 +102,24 @@ export default function SearchScreen() {
 
       {query.length === 0 ? (
         <View style={styles.discoverSection}>
-          <Text style={styles.discoverTitle}>Trending Creators</Text>
+          <Text variant="h3" color={Colors.accent} style={styles.discoverTitle}>Trending Creators</Text>
           {trendingUsers.map(user => {
             const isFollowing = following.has(user.id);
             return (
               <View key={user.id} style={styles.userRow}>
                 <Avatar uri={user.avatarUri} size={48} />
                 <View style={styles.userInfo}>
-                  <Text style={styles.userDisplayName}>{user.displayName}</Text>
-                  <Text style={styles.userUsername}>@{user.username}</Text>
-                  <Text style={styles.userFollowers}>{user.followerCount.toLocaleString()} followers</Text>
+                  <Text variant="body" bold>{user.displayName}</Text>
+                  <Text variant="caption" color={Colors.textDim}>@{user.username}</Text>
+                  <Text variant="caption" color={Colors.textMuted} style={{ marginTop: 2 }}>
+                    {user.followerCount.toLocaleString()} followers
+                  </Text>
                 </View>
                 <Pressable
                   onPress={() => toggleFollow(user.id)}
                   style={[styles.followBtn, isFollowing && styles.followBtnActive]}
                 >
-                  <Text style={[styles.followText, isFollowing && styles.followTextActive]}>
+                  <Text variant="label" color={isFollowing ? Colors.bg : Colors.accent} style={{ fontSize: FontSize.sm }}>
                     {isFollowing ? 'Following' : 'Follow'}
                   </Text>
                 </Pressable>
@@ -131,10 +135,11 @@ export default function SearchScreen() {
           contentContainerStyle={{ paddingBottom: Platform.OS === 'web' ? 84 : 100 }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <Ionicons name="search-outline" size={48} color={Colors.textMuted} />
-              <Text style={styles.emptyText}>No results found</Text>
-            </View>
+            <EmptyState
+              icon={<Ionicons name="search-outline" size={28} color={Colors.accent} />}
+              title="No results found"
+              message="Try a different search term"
+            />
           }
         />
       )}
@@ -148,108 +153,62 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
   },
   searchSection: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.sm,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surfaceLight,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
     height: 44,
-    gap: 8,
+    gap: Spacing.sm,
   },
   searchInput: {
     flex: 1,
     color: Colors.text,
-    fontSize: 16,
-    fontFamily: 'DMSans_400Regular',
+    fontSize: FontSize.lg,
+    fontFamily: FontFamily.regular,
   },
   tabs: {
     flexDirection: 'row',
     gap: 6,
-    marginTop: 10,
+    marginTop: Spacing.sm,
   },
   tab: {
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing.lg,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: Radius.pill,
     backgroundColor: Colors.surfaceLight,
   },
   tabActive: {
     backgroundColor: Colors.accent,
   },
-  tabText: {
-    color: Colors.textDim,
-    fontSize: 13,
-    fontFamily: 'DMSans_600SemiBold',
-  },
-  tabTextActive: {
-    color: Colors.bg,
-  },
   discoverSection: {
-    padding: 16,
+    padding: Spacing.lg,
   },
   discoverTitle: {
-    color: Colors.accent,
-    fontSize: 18,
-    fontFamily: 'DMSans_700Bold',
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
   userRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    gap: 12,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.md,
   },
   userInfo: {
     flex: 1,
   },
-  userDisplayName: {
-    color: Colors.text,
-    fontSize: 15,
-    fontFamily: 'DMSans_600SemiBold',
-  },
-  userUsername: {
-    color: Colors.textDim,
-    fontSize: 13,
-    fontFamily: 'DMSans_400Regular',
-  },
-  userFollowers: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: 'DMSans_400Regular',
-    marginTop: 2,
-  },
   followBtn: {
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing.lg,
     paddingVertical: 7,
-    borderRadius: 20,
+    borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: Colors.accent,
   },
   followBtnActive: {
     backgroundColor: Colors.accent,
-  },
-  followText: {
-    color: Colors.accent,
-    fontSize: 13,
-    fontFamily: 'DMSans_600SemiBold',
-  },
-  followTextActive: {
-    color: Colors.bg,
-  },
-  empty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 80,
-    gap: 12,
-  },
-  emptyText: {
-    color: Colors.textDim,
-    fontSize: 16,
-    fontFamily: 'DMSans_400Regular',
   },
 });
