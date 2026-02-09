@@ -1056,6 +1056,160 @@
       line-height: 1.5;
     }
 
+    /* System Integrations */
+    .intg-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+
+    .intg-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .intg-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .intg-info {
+      flex: 1;
+    }
+
+    .intg-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+
+    .intg-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .intg-status-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .intg-status {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.05);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .intg-status.configured {
+      background: rgba(52,199,89,0.15);
+      color: var(--success);
+      border-color: rgba(52,199,89,0.3);
+    }
+
+    .intg-status.error {
+      background: var(--danger-dim);
+      color: var(--danger);
+      border-color: rgba(255,68,68,0.3);
+    }
+
+    .intg-toggle {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      cursor: pointer;
+    }
+
+    .intg-toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .intg-toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--surface-light);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      transition: all 0.3s;
+    }
+
+    .intg-toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 2px;
+      bottom: 2px;
+      background: var(--text-muted);
+      border-radius: 50%;
+      transition: all 0.3s;
+    }
+
+    .intg-toggle input:checked + .intg-toggle-slider {
+      background: var(--accent-dim);
+      border-color: var(--accent-border);
+    }
+
+    .intg-toggle input:checked + .intg-toggle-slider::before {
+      transform: translateX(20px);
+      background: var(--accent);
+    }
+
+    .intg-fields {
+      padding: 20px 24px;
+    }
+
+    .intg-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 4px;
+    }
+
+    .intg-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .intg-test-result {
+      font-size: 13px;
+      margin-left: 4px;
+    }
+
+    .intg-test-result.success {
+      color: var(--success);
+    }
+
+    .intg-test-result.error {
+      color: var(--danger);
+    }
+
+    .intg-test-result.loading {
+      color: var(--text-muted);
+    }
+
     @media (max-width: 768px) {
       .topbar { padding: 12px 16px; }
       .tab-bar { padding: 0 12px; overflow-x: auto; }
@@ -1067,6 +1221,9 @@
       .docs-browser { flex-direction: column; height: auto; }
       .docs-sidebar { width: 100%; min-width: 100%; max-height: 300px; border-right: none; border-bottom: 1px solid var(--border); }
       .cov-summary, .cov-details { grid-template-columns: 1fr; }
+      .intg-header { flex-wrap: wrap; }
+      .intg-row { flex-direction: column; gap: 4px; }
+      .intg-actions { flex-wrap: wrap; }
     }
   </style>
 </head>
@@ -1109,6 +1266,7 @@
       <button class="tab-btn active" data-tab="reports">Reports</button>
       <button class="tab-btn" data-tab="users">App Users</button>
       <button class="tab-btn" data-tab="docs">App Docs</button>
+      <button class="tab-btn" data-tab="integrations">System Integrations</button>
     </div>
 
     <!-- Reports Tab -->
@@ -1237,6 +1395,155 @@
           <div class="cov-missing" id="covMissing"></div>
           <div class="cov-details" id="covDetails"></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+    <!-- Integrations Tab -->
+    <div class="tab-content" id="tab-integrations">
+      <div id="integrationsLoading" class="loading"><div class="spinner"></div></div>
+      <div id="integrationsContent" style="display:none;">
+
+        <!-- Mailgun -->
+        <div class="intg-card" data-service="mailgun">
+          <div class="intg-header">
+            <div class="intg-icon" style="background:rgba(244,67,54,0.15);color:#F44336;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            </div>
+            <div class="intg-info">
+              <div class="intg-name">Mailgun</div>
+              <div class="intg-desc">Transactional email delivery service</div>
+            </div>
+            <div class="intg-status-wrap">
+              <span class="intg-status" id="mailgun-status">Not Configured</span>
+              <label class="intg-toggle">
+                <input type="checkbox" id="mailgun-enabled">
+                <span class="intg-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="intg-fields">
+            <div class="intg-row">
+              <div class="form-group" style="flex:1;">
+                <label>API Key</label>
+                <input type="password" class="form-input" id="mailgun-apiKey" placeholder="key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label>Domain</label>
+                <input type="text" class="form-input" id="mailgun-domain" placeholder="mg.yourdomain.com">
+              </div>
+            </div>
+            <div class="intg-row">
+              <div class="form-group" style="flex:1;">
+                <label>From Email</label>
+                <input type="email" class="form-input" id="mailgun-fromEmail" placeholder="noreply@yourdomain.com">
+              </div>
+              <div class="form-group" style="width:160px;">
+                <label>Region</label>
+                <select class="form-input" id="mailgun-region">
+                  <option value="us">US</option>
+                  <option value="eu">EU</option>
+                </select>
+              </div>
+            </div>
+            <div class="intg-actions">
+              <button class="btn btn-primary" onclick="saveIntegration('mailgun')">Save</button>
+              <button class="btn btn-outline" onclick="testIntegration('mailgun')">Test Connection</button>
+              <span class="intg-test-result" id="mailgun-test-result"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cloudflare R2 -->
+        <div class="intg-card" data-service="cloudflare_r2">
+          <div class="intg-header">
+            <div class="intg-icon" style="background:rgba(245,158,11,0.15);color:#F59E0B;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+            </div>
+            <div class="intg-info">
+              <div class="intg-name">Cloudflare R2 Storage</div>
+              <div class="intg-desc">S3-compatible object storage with zero egress fees</div>
+            </div>
+            <div class="intg-status-wrap">
+              <span class="intg-status" id="cloudflare_r2-status">Not Configured</span>
+              <label class="intg-toggle">
+                <input type="checkbox" id="cloudflare_r2-enabled">
+                <span class="intg-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="intg-fields">
+            <div class="intg-row">
+              <div class="form-group" style="flex:1;">
+                <label>Account ID</label>
+                <input type="text" class="form-input" id="cloudflare_r2-accountId" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label>Bucket Name</label>
+                <input type="text" class="form-input" id="cloudflare_r2-bucketName" placeholder="my-bucket">
+              </div>
+            </div>
+            <div class="intg-row">
+              <div class="form-group" style="flex:1;">
+                <label>Access Key ID</label>
+                <input type="password" class="form-input" id="cloudflare_r2-accessKeyId" placeholder="Access Key ID">
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label>Secret Access Key</label>
+                <input type="password" class="form-input" id="cloudflare_r2-secretAccessKey" placeholder="Secret Access Key">
+              </div>
+            </div>
+            <div class="intg-actions">
+              <button class="btn btn-primary" onclick="saveIntegration('cloudflare_r2')">Save</button>
+              <button class="btn btn-outline" onclick="testIntegration('cloudflare_r2')">Test Connection</button>
+              <span class="intg-test-result" id="cloudflare_r2-test-result"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Twilio -->
+        <div class="intg-card" data-service="twilio">
+          <div class="intg-header">
+            <div class="intg-icon" style="background:rgba(233,30,99,0.15);color:#E91E63;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            </div>
+            <div class="intg-info">
+              <div class="intg-name">Twilio</div>
+              <div class="intg-desc">SMS, voice calls, and messaging API</div>
+            </div>
+            <div class="intg-status-wrap">
+              <span class="intg-status" id="twilio-status">Not Configured</span>
+              <label class="intg-toggle">
+                <input type="checkbox" id="twilio-enabled">
+                <span class="intg-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="intg-fields">
+            <div class="intg-row">
+              <div class="form-group" style="flex:1;">
+                <label>Account SID</label>
+                <input type="text" class="form-input" id="twilio-accountSid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label>Auth Token</label>
+                <input type="password" class="form-input" id="twilio-authToken" placeholder="Your auth token">
+              </div>
+            </div>
+            <div class="intg-row">
+              <div class="form-group" style="flex:1;max-width:320px;">
+                <label>Phone Number</label>
+                <input type="text" class="form-input" id="twilio-phoneNumber" placeholder="+1234567890">
+              </div>
+            </div>
+            <div class="intg-actions">
+              <button class="btn btn-primary" onclick="saveIntegration('twilio')">Save</button>
+              <button class="btn btn-outline" onclick="testIntegration('twilio')">Test Connection</button>
+              <span class="intg-test-result" id="twilio-test-result"></span>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -1383,6 +1690,7 @@
         if (tab === 'reports') loadReports();
         if (tab === 'users') loadUsers();
         if (tab === 'docs') loadDocsTab();
+        if (tab === 'integrations') loadIntegrations();
       });
     });
 
@@ -2036,6 +2344,128 @@
           <div class="cov-detail-list">${funcRows || '<div class="empty-state" style="padding:16px;">No functional docs found</div>'}</div>
         </div>
       `;
+    }
+
+    // ===== INTEGRATIONS TAB =====
+    const INTG_FIELDS = {
+      mailgun: ['apiKey', 'domain', 'fromEmail', 'region'],
+      cloudflare_r2: ['accountId', 'bucketName', 'accessKeyId', 'secretAccessKey'],
+      twilio: ['accountSid', 'authToken', 'phoneNumber'],
+    };
+
+    async function loadIntegrations() {
+      document.getElementById('integrationsLoading').style.display = 'block';
+      document.getElementById('integrationsContent').style.display = 'none';
+
+      try {
+        const res = await api('/api/admin/integrations');
+        const data = await res.json();
+
+        for (const [service, fields] of Object.entries(INTG_FIELDS)) {
+          const intg = data[service];
+          const statusEl = document.getElementById(service + '-status');
+          const enabledEl = document.getElementById(service + '-enabled');
+
+          if (intg) {
+            for (const field of fields) {
+              const el = document.getElementById(service + '-' + field);
+              if (el && intg.config[field]) {
+                el.value = intg.config[field];
+              }
+            }
+            enabledEl.checked = intg.enabled;
+            updateIntgStatus(service, intg);
+          } else {
+            statusEl.textContent = 'Not Configured';
+            statusEl.className = 'intg-status';
+            enabledEl.checked = false;
+          }
+        }
+
+        document.getElementById('integrationsLoading').style.display = 'none';
+        document.getElementById('integrationsContent').style.display = 'block';
+      } catch (err) {
+        document.getElementById('integrationsLoading').innerHTML = '<p style="color:var(--danger);">Failed to load integrations</p>';
+      }
+    }
+
+    function updateIntgStatus(service, intg) {
+      const statusEl = document.getElementById(service + '-status');
+      if (intg.lastTestResult === 'pass') {
+        statusEl.textContent = 'Connected';
+        statusEl.className = 'intg-status configured';
+      } else if (intg.lastTestResult && intg.lastTestResult.startsWith('fail')) {
+        statusEl.textContent = 'Error';
+        statusEl.className = 'intg-status error';
+      } else if (intg.enabled) {
+        statusEl.textContent = 'Configured';
+        statusEl.className = 'intg-status configured';
+      } else {
+        statusEl.textContent = 'Disabled';
+        statusEl.className = 'intg-status';
+      }
+    }
+
+    async function saveIntegration(service) {
+      const fields = INTG_FIELDS[service];
+      const config = {};
+      for (const field of fields) {
+        const el = document.getElementById(service + '-' + field);
+        if (el) config[field] = el.value;
+      }
+      const enabled = document.getElementById(service + '-enabled').checked;
+      const resultEl = document.getElementById(service + '-test-result');
+
+      resultEl.textContent = 'Saving...';
+      resultEl.className = 'intg-test-result loading';
+
+      try {
+        const res = await api('/api/admin/integrations', {
+          method: 'PUT',
+          body: JSON.stringify({ service, config, enabled }),
+        });
+
+        if (res.ok) {
+          resultEl.textContent = 'Saved successfully';
+          resultEl.className = 'intg-test-result success';
+          loadIntegrations();
+        } else {
+          const data = await res.json();
+          resultEl.textContent = data.error || 'Save failed';
+          resultEl.className = 'intg-test-result error';
+        }
+      } catch (err) {
+        resultEl.textContent = 'Save failed';
+        resultEl.className = 'intg-test-result error';
+      }
+
+      setTimeout(() => { resultEl.textContent = ''; resultEl.className = 'intg-test-result'; }, 4000);
+    }
+
+    async function testIntegration(service) {
+      const resultEl = document.getElementById(service + '-test-result');
+      resultEl.textContent = 'Testing...';
+      resultEl.className = 'intg-test-result loading';
+
+      try {
+        const res = await api('/api/admin/integrations/' + service + '/test', { method: 'POST' });
+        const data = await res.json();
+
+        if (data.success) {
+          resultEl.textContent = data.message;
+          resultEl.className = 'intg-test-result success';
+        } else {
+          resultEl.textContent = data.message || 'Test failed';
+          resultEl.className = 'intg-test-result error';
+        }
+
+        loadIntegrations();
+      } catch (err) {
+        resultEl.textContent = 'Connection failed';
+        resultEl.className = 'intg-test-result error';
+      }
+
+      setTimeout(() => { resultEl.textContent = ''; resultEl.className = 'intg-test-result'; }, 6000);
     }
 
     // Init
