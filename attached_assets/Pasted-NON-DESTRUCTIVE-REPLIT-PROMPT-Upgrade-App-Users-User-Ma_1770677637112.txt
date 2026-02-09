@@ -1,0 +1,235 @@
+NON-DESTRUCTIVE REPLIT PROMPT — Upgrade “App Users” → “User Management” (Full Admin Customer Support Suite)
+
+You are working in an existing monorepo:
+- Expo (React Native) frontend using expo-router
+- Express backend (server/…)
+- PostgreSQL + Drizzle schema in shared/schema.ts
+- Session auth using express-session + connect-pg-simple
+DO NOT remove or rewrite working features. Make additive, non-destructive changes only. Preserve existing behavior and routes unless explicitly adding new endpoints. Keep UI consistent with the existing admin theme (dark + gold accent + DM Sans).
+
+GOAL
+Expand the Admin “App Users” area into a full “User Management” suite for customer service. Admins must be able to:
+1) Create users manually (admin-created accounts)
+2) Send password reset links
+3) Set/change user password manually (admin override)
+4) Assign/change user type (User/Admin)
+5) View rich user profile + support actions and an audit trail
+Rename “App Users” navigation + page title to “User Management”.
+
+SECURITY / SAFETY REQUIREMENTS (CRITICAL)
+- All new actions are ADMIN-ONLY (requireAuth + requireAdmin).
+- Never expose password hashes, session secrets, reset tokens, or any sensitive values to the client.
+- If you implement password reset tokens, store only hashed tokens server-side; tokens must expire.
+- Log all admin actions with who did it, who was affected, when, and what changed (no secrets).
+- Enforce rate limits on sensitive actions (create user, reset link, set password).
+- Standardize responses: { ok: true, data } / { ok: false, error: { code, message, details? } }.
+
+PHASE 1 — DATABASE / SCHEMA (Drizzle)
+1) Users table enhancements (if not already present)
+- Add isAdmin boolean default false (or userRole enum if preferred; choose ONE clean approach).
+- Add optional status fields:
+  - isDisabled boolean default false (optional but useful)
+  - disabledAt timestamp nullable
+  - disabledReason text nullable
+
+2) Password reset tokens table (new)
+Create user_password_resets:
+- id uuid
+- userId fk users.id
+- tokenHash text (hash of token)
+- createdAt timestamp
+- expiresAt timestamp
+- usedAt timestamp nullable
+- createdByAdminId fk users.id nullable (set when an admin triggers it)
+Indexes:
+- userId, expiresAt, usedAt
+
+3) Admin audit log table (new, or reuse system_events if you added it)
+Create admin_audit_log:
+- id uuid
+- createdAt timestamp
+- adminUserId fk users.id
+- action text (e.g., USER_CREATE, USER_RESET_LINK_SENT, USER_PASSWORD_SET, USER_ROLE_CHANGED, USER_DISABLED)
+- targetUserId fk users.id
+- details jsonb (redacted; do not store tokens/passwords)
+Indexes:
+- createdAt desc, action, targetUserId
+
+Run migrations safely.
+
+PHASE 2 — BACKEND (Express) ADMIN ENDPOINTS
+Create a feature module: server/routes/adminUsers.routes.ts mounted under:
+- /api/admin/users
+
+Add/ensure middlewares:
+- requireAuth (existing)
+- requireAdmin (existing or add)
+- rateLimitSensitiveAdminActions (simple in-memory OK initially; document moving to Redis later)
+
+Implement endpoints (non-breaking; additive):
+
+A) List + Search users
+GET /api/admin/users?query=&role=&status=&limit=&cursor=
+- Supports searching by email/username
+- Filter by role (admin/user), status (active/disabled)
+- Returns paginated list (id, email, username, avatarUrl, bio, role/isAdmin, createdAt, lastLoginAt if available)
+
+B) Get user details (support view)
+GET /api/admin/users/:id
+- Returns full admin-safe profile:
+  - basic info, role, status, createdAt
+  - any relevant counts: solos count, followers/following counts (if present)
+  - last few recent events (logins, failed uploads) if system_events exists (optional)
+- Do NOT include passwordHash or session data.
+
+C) Create user manually (admin onboarding)
+POST /api/admin/users
+Body:
+- email (required)
+- username (optional)
+- tempPassword (optional)
+- role (User/Admin) default User
+- sendInviteResetLink boolean default true
+Behavior:
+- Create user
+- If tempPassword provided: set password hash
+- If sendInviteResetLink true: generate password reset token and return “sent” status; also attempt to send email if mail provider exists; if no email system exists, generate an “Admin Copy Link” and show it ONCE in UI.
+- Always write admin_audit_log.
+
+D) Send password reset link
+POST /api/admin/users/:id/send-reset
+Body:
+- delivery: "email" | "manual" (manual returns one-time link for copying)
+Behavior:
+- Create reset token (expires in e.g., 60 minutes)
+- If email delivery configured: send email
+- Otherwise return a one-time reset link for the admin to copy
+- Log audit action
+- Rate limit
+
+E) Set/change password manually (admin override)
+POST /api/admin/users/:id/set-password
+Body:
+- newPassword (required)
+- forceLogout boolean default true
+Behavior:
+- Validate password policy (min length, etc.)
+- Set password hash
+- If forceLogout: invalidate existing sessions for that user (delete from session store if feasible)
+- Log audit action (do not store password)
+- Rate limit
+
+F) Change user role (User/Admin)
+PATCH /api/admin/users/:id/role
+Body:
+- role: "User" | "Admin"
+Behavior:
+- Update role/isAdmin
+- Prevent admins from demoting themselves if they are the only admin (safety check)
+- Log audit action
+
+G) Disable/Enable user (recommended for support)
+PATCH /api/admin/users/:id/status
+Body:
+- isDisabled boolean
+- reason optional
+Behavior:
+- Disable blocks login and API access (requireAuth should reject)
+- If enabling, clear disabledAt/reason
+- Log audit action
+- Optional: forceLogout on disable
+
+H) Audit log for a user
+GET /api/admin/users/:id/audit?limit=&cursor=
+- Returns admin_audit_log entries for that target user.
+
+PHASE 3 — PASSWORD RESET FLOW (END-TO-END)
+If a password reset flow already exists, EXTEND IT safely. If not, implement:
+
+1) Public endpoint to verify token + set password (non-admin)
+POST /api/auth/reset-password
+Body:
+- token
+- userId
+- newPassword
+Behavior:
+- hash token and match unexpired unused reset row
+- mark usedAt
+- set new password hash
+- optionally invalidate sessions
+
+2) Reset link format
+- /reset-password?userId=...&token=...
+- For Expo app: add a screen/route that can accept deep link params and submit reset.
+- If deep linking not set up, create an in-app screen reachable by route and document the manual process.
+
+PHASE 4 — ADMIN UI: RENAME + UPGRADE “APP USERS” → “USER MANAGEMENT”
+1) Rename
+- Update Admin navigation label: “App Users” → “User Management”
+- Update screen title and route display names accordingly
+- Keep old route working if it exists (redirect or alias), so non-destructive.
+
+2) User Management list screen
+- Search bar (email/username)
+- Filters: Role (All/User/Admin), Status (All/Active/Disabled)
+- Table/list rows with quick actions:
+  - View
+  - Send Reset
+  - Set Password
+  - Change Role
+  - Disable/Enable
+- Add skeleton loading, empty states, and confirmation modals for destructive actions.
+
+3) User detail drawer/screen (support console)
+Include sections:
+- Profile (email, username, avatar, bio, role, status)
+- Activity (solos count, last createdAt, etc. if available)
+- Support actions panel:
+  - Send reset link (modal with Email vs Manual option)
+  - Set password (modal with password policy hint + force logout toggle)
+  - Change role (segmented control User/Admin)
+  - Disable/Enable (with reason)
+- Audit Log timeline (most recent first)
+- “Copy user ID” and “Copy email” utilities
+
+4) One-time reset link handling
+- If backend returns a manual reset link, show it in a secure modal:
+  - clearly label “Shown once”
+  - copy-to-clipboard button
+  - do not store in local state longer than necessary
+
+PHASE 5 — QUALITY, CONSISTENCY, DOCUMENTATION
+1) Validation + errors
+- Use the app’s standard validation/error middleware (or implement minimal zod validation).
+- Ensure consistent 401/403 handling.
+
+2) Tests / smoke checks
+- Add a minimal admin smoke script or tests:
+  - create user
+  - send reset
+  - set password
+  - change role
+  - disable/enable
+- Ensure unauthorized users cannot access endpoints.
+
+3) Docs Library updates
+Create/update pages:
+- “User Management (Admin)”
+- “Password Reset Flow”
+- “Roles & Permissions”
+- “Audit Logging & Security Notes”
+Include:
+- How to grant first admin
+- How manual reset links work if email isn’t configured
+- Password policy
+- Session invalidation behavior
+
+ACCEPTANCE CRITERIA
+- Admin can create users, send reset links, set password, change role, disable/enable.
+- Non-admin cannot access any /api/admin/users endpoints.
+- All actions are logged in admin_audit_log (or equivalent).
+- No secrets, tokens, or hashes are exposed.
+- UI is consistent, polished, and renamed to “User Management”.
+- Existing functionality remains intact.
+
+Proceed carefully, implement in small commits, run typechecks, and ensure mobile admin UI works smoothly.

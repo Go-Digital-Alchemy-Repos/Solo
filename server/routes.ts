@@ -24,6 +24,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/admin", adminRoutes);
 
   app.get("/api/audio/:fileId", streamAudio);
+  app.head("/api/audio/:fileId", streamAudio);
   app.options("/api/audio/:fileId", audioOptions);
   app.get("/api/avatars/:fileName", serveAvatar);
 

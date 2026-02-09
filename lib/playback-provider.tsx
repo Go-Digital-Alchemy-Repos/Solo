@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useRef, useCallback, useMemo, ReactNode, useEffect } from 'react';
-import { Audio } from 'expo-av';
+import { Audio, AVPlaybackStatus } from 'expo-av';
 import { Platform } from 'react-native';
 
 interface PlaybackState {
@@ -8,6 +8,7 @@ interface PlaybackState {
   positionMillis: number;
   durationMillis: number;
   isLoading: boolean;
+  isBuffering: boolean;
 }
 
 interface PlaybackContextValue {
@@ -18,20 +19,26 @@ interface PlaybackContextValue {
   stop: () => Promise<void>;
   seekTo: (positionMillis: number) => Promise<void>;
   savedPositions: Record<string, number>;
+  preload: (uri: string) => void;
 }
 
 const PlaybackContext = createContext<PlaybackContextValue | null>(null);
 
+const INITIAL_STATE: PlaybackState = {
+  currentPostId: null,
+  isPlaying: false,
+  positionMillis: 0,
+  durationMillis: 0,
+  isLoading: false,
+  isBuffering: false,
+};
+
 export function PlaybackProvider({ children }: { children: ReactNode }) {
   const soundRef = useRef<Audio.Sound | null>(null);
-  const [state, setState] = useState<PlaybackState>({
-    currentPostId: null,
-    isPlaying: false,
-    positionMillis: 0,
-    durationMillis: 0,
-    isLoading: false,
-  });
+  const [state, setState] = useState<PlaybackState>(INITIAL_STATE);
   const [savedPositions, setSavedPositions] = useState<Record<string, number>>({});
+  const preloadedRef = useRef<Set<string>>(new Set());
+  const currentPostIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     Audio.setAudioModeAsync({
@@ -45,30 +52,46 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     if (soundRef.current) {
       try {
         const status = await soundRef.current.getStatusAsync();
-        if (status.isLoaded && state.currentPostId) {
+        if (status.isLoaded && currentPostIdRef.current) {
           setSavedPositions(prev => ({
             ...prev,
-            [state.currentPostId!]: status.positionMillis,
+            [currentPostIdRef.current!]: status.positionMillis,
           }));
         }
         await soundRef.current.unloadAsync();
       } catch {}
       soundRef.current = null;
     }
-  }, [state.currentPostId]);
+  }, []);
 
   const play = useCallback(async (postId: string, uri: string, startPosition?: number) => {
-    setState(prev => ({ ...prev, isLoading: true }));
+    if (currentPostIdRef.current === postId && soundRef.current) {
+      try {
+        const status = await soundRef.current.getStatusAsync();
+        if (status.isLoaded) {
+          if (startPosition !== undefined) {
+            await soundRef.current.setPositionAsync(startPosition);
+          }
+          await soundRef.current.playAsync();
+          return;
+        }
+      } catch {}
+    }
+
+    setState(prev => ({ ...prev, isLoading: true, currentPostId: postId }));
+    currentPostIdRef.current = postId;
     await cleanup();
 
     try {
+      const initialPosition = startPosition ?? savedPositions[postId] ?? 0;
       const { sound } = await Audio.Sound.createAsync(
         { uri },
         {
           shouldPlay: true,
-          positionMillis: startPosition ?? savedPositions[postId] ?? 0,
+          positionMillis: initialPosition,
+          progressUpdateIntervalMillis: 100,
         },
-        (status) => {
+        (status: AVPlaybackStatus) => {
           if (status.isLoaded) {
             setState(prev => ({
               ...prev,
@@ -76,8 +99,10 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
               positionMillis: status.positionMillis,
               durationMillis: status.durationMillis ?? 0,
               isLoading: false,
+              isBuffering: status.isBuffering ?? false,
             }));
             if (status.didJustFinish) {
+              currentPostIdRef.current = null;
               setState(prev => ({
                 ...prev,
                 isPlaying: false,
@@ -107,30 +132,45 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
 
   const pause = useCallback(async () => {
     if (soundRef.current) {
-      await soundRef.current.pauseAsync();
+      try {
+        await soundRef.current.pauseAsync();
+      } catch {}
     }
   }, []);
 
   const resume = useCallback(async () => {
     if (soundRef.current) {
-      await soundRef.current.playAsync();
+      try {
+        await soundRef.current.playAsync();
+      } catch {}
     }
   }, []);
 
   const stop = useCallback(async () => {
+    currentPostIdRef.current = null;
     await cleanup();
-    setState({
-      currentPostId: null,
-      isPlaying: false,
-      positionMillis: 0,
-      durationMillis: 0,
-      isLoading: false,
-    });
+    setState(INITIAL_STATE);
   }, [cleanup]);
 
   const seekTo = useCallback(async (positionMillis: number) => {
     if (soundRef.current) {
-      await soundRef.current.setPositionAsync(positionMillis);
+      try {
+        await soundRef.current.setPositionAsync(positionMillis);
+      } catch {}
+    }
+  }, []);
+
+  const preload = useCallback((uri: string) => {
+    if (preloadedRef.current.has(uri)) return;
+    preloadedRef.current.add(uri);
+    if (Platform.OS === 'web') {
+      const audio = new globalThis.Audio();
+      audio.preload = 'metadata';
+      audio.src = uri;
+    }
+    if (preloadedRef.current.size > 20) {
+      const first = preloadedRef.current.values().next().value;
+      if (first) preloadedRef.current.delete(first);
     }
   }, []);
 
@@ -142,7 +182,8 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     stop,
     seekTo,
     savedPositions,
-  }), [state, play, pause, resume, stop, seekTo, savedPositions]);
+    preload,
+  }), [state, play, pause, resume, stop, seekTo, savedPositions, preload]);
 
   return (
     <PlaybackContext.Provider value={value}>

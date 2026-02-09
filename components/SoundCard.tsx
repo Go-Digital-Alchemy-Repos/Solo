@@ -1,8 +1,7 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput, FlatList, Platform, ActivityIndicator, PanResponder, LayoutChangeEvent } from 'react-native';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Animated, { useAnimatedStyle, withSpring, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import Colors from '@/constants/colors';
 import Avatar from './Avatar';
@@ -10,7 +9,7 @@ import WaveformBars from './WaveformBars';
 import LyricView from './LyricView';
 import { usePlayback } from '@/lib/playback-provider';
 import { useData, type AudioPost, type Transcript } from '@/lib/data-context';
-import { getApiUrl } from '@/lib/query-client';
+import { authFetch } from '@/lib/auth-fetch';
 
 interface SoundCardProps {
   post: AudioPost;
@@ -34,7 +33,7 @@ function formatTimeAgo(timestamp: number): string {
 }
 
 export default function SoundCard({ post }: SoundCardProps) {
-  const { state, play, pause, resume, seekTo } = usePlayback();
+  const { state, play, pause, resume, seekTo, preload } = usePlayback();
   const { toggleLike, addComment, following, toggleFollow } = useData();
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -47,8 +46,15 @@ export default function SoundCard({ post }: SoundCardProps) {
   const scrubberWidth = useRef(0);
   const scrubRef = useRef({ scrubPosition: 0, durationMillis: 0, isLoaded: false });
 
+  useEffect(() => {
+    if (post.audioUrl) {
+      preload(post.audioUrl);
+    }
+  }, [post.audioUrl, preload]);
+
   const isThisPlaying = state.currentPostId === post.id && state.isPlaying;
   const isThisLoaded = state.currentPostId === post.id;
+  const isThisLoading = state.currentPostId === post.id && state.isLoading;
   const progress = isThisLoaded && state.durationMillis > 0
     ? state.positionMillis / state.durationMillis
     : 0;
@@ -150,21 +156,9 @@ export default function SoundCard({ post }: SoundCardProps) {
     }
     setIsTranscribing(true);
     try {
-      const baseUrl = getApiUrl();
-      const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
-      const headers: Record<string, string> = {};
-      const sessionCookie = await AsyncStorage.getItem('solo_auth_session');
-      if (sessionCookie) {
-        headers['X-Session-Token'] = sessionCookie;
-        if (Platform.OS !== 'web') {
-          headers['Cookie'] = sessionCookie;
-        }
-      }
-      const res = await fetchFn(new URL(`/api/solos/${post.id}/transcribe`, baseUrl).toString(), {
+      const res = await authFetch(`/api/solos/${post.id}/transcribe`, {
         method: 'POST',
-        headers,
-        credentials: 'include',
-      } as any);
+      });
       if (res.ok) {
         const data = await res.json();
         if (data.transcript && data.transcript.words?.length > 0) {
@@ -228,6 +222,7 @@ export default function SoundCard({ post }: SoundCardProps) {
             progress={displayProgress}
             height={64}
             barWidth={3}
+            loading={isThisLoading}
           />
         )}
       </View>

@@ -18,6 +18,44 @@ interface WaveformBarsProps {
   height?: number;
   barWidth?: number;
   gap?: number;
+  loading?: boolean;
+}
+
+function SkeletonBar({ index, maxHeight, barWidth }: { index: number; maxHeight: number; barWidth: number }) {
+  const opacity = useSharedValue(0.15);
+
+  useEffect(() => {
+    opacity.value = withDelay(
+      index * 30,
+      withRepeat(
+        withSequence(
+          withTiming(0.35, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.15, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1,
+        true,
+      ),
+    );
+  }, []);
+
+  const barHeight = 4 + (Math.sin(index * 0.5) * 0.5 + 0.5) * (maxHeight - 8);
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        {
+          width: barWidth,
+          height: barHeight,
+          borderRadius: barWidth / 2,
+          backgroundColor: '#FFD700',
+        },
+        animStyle,
+      ]}
+    />
+  );
 }
 
 function AnimatedProgressOverlay({ progress, height }: { progress: number; height: number }) {
@@ -112,7 +150,18 @@ function AnimatedBar({ value, index, isPlaying, isPast, maxHeight, barWidth, tot
   );
 }
 
-export default function WaveformBars({ data, isPlaying, progress = 0, height = 40, barWidth = 3, gap = 2 }: WaveformBarsProps) {
+export default function WaveformBars({ data, isPlaying, progress = 0, height = 40, barWidth = 3, gap = 2, loading = false }: WaveformBarsProps) {
+  if (loading) {
+    const skeletonCount = Math.min(data.length || 50, 70);
+    return (
+      <View style={[styles.container, { height }]}>
+        {Array.from({ length: skeletonCount }, (_, i) => (
+          <SkeletonBar key={i} index={i} maxHeight={height} barWidth={barWidth} />
+        ))}
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { height }]}>
       {data.map((value, index) => {

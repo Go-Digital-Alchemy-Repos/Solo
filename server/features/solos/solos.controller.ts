@@ -181,13 +181,32 @@ export function streamAudio(req: Request, res: Response) {
   const stat = fs.statSync(filePath);
   const fileSize = stat.size;
 
+  const etag = `"${fileId}-${stat.size}-${stat.mtimeMs}"`;
+  const lastModified = stat.mtime.toUTCString();
+
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Range, Content-Type");
-  res.set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges");
-  res.set("Content-Type", "audio/x-m4a");
+  res.set("Access-Control-Allow-Headers", "Range, Content-Type, If-None-Match, If-Modified-Since");
+  res.set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges, ETag, Last-Modified");
+  res.set("Content-Type", "audio/mp4");
   res.set("Accept-Ranges", "bytes");
-  res.set("Cache-Control", "public, max-age=31536000");
+  res.set("Cache-Control", "public, max-age=31536000, immutable");
+  res.set("ETag", etag);
+  res.set("Last-Modified", lastModified);
+
+  if (req.headers["if-none-match"] === etag) {
+    return res.status(304).end();
+  }
+
+  const ifModifiedSince = req.headers["if-modified-since"];
+  if (ifModifiedSince && new Date(ifModifiedSince) >= stat.mtime) {
+    return res.status(304).end();
+  }
+
+  if (req.method === "HEAD") {
+    res.set("Content-Length", fileSize.toString());
+    return res.status(200).end();
+  }
 
   const rangeHeader = req.headers.range;
   if (rangeHeader) {
@@ -217,8 +236,8 @@ export function streamAudio(req: Request, res: Response) {
 export function audioOptions(_req: Request, res: Response) {
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Range, Content-Type");
-  res.set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges");
+  res.set("Access-Control-Allow-Headers", "Range, Content-Type, If-None-Match, If-Modified-Since");
+  res.set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges, ETag, Last-Modified");
   return res.sendStatus(204);
 }
 
