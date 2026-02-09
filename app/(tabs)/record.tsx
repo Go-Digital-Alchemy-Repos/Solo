@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { StyleSheet, View, Text, Pressable, Platform, Alert } from 'react-native';
+import { StyleSheet, View, Pressable, Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Audio } from 'expo-av';
@@ -7,6 +7,8 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming, withSequence, Easing } from 'react-native-reanimated';
 import Colors from '@/constants/colors';
+import { Spacing, Radius, FontSize, FontFamily } from '@/constants/theme';
+import { Text } from '@/components/ui';
 import SoloHeader from '@/components/SoloHeader';
 import WaveformTrimmer from '@/components/WaveformTrimmer';
 import Teleprompter from '@/components/Teleprompter';
@@ -145,8 +147,8 @@ function ProcessingScreen({ soloId, onComplete, onFailed }: {
           <Ionicons name={stepInfo.icon} size={36} color={Colors.bg} />
         </View>
       </View>
-      <Text style={styles.processingTitle}>Processing your Solo</Text>
-      <Text style={styles.processingSubtitle}>{stepInfo.label}...</Text>
+      <Text variant="h3" align="center">Processing your Solo</Text>
+      <Text variant="body" color={Colors.textDim} align="center">{stepInfo.label}...</Text>
       <View style={styles.stepsContainer}>
         {STEP_ORDER.map((step, i) => {
           const info = STEP_LABELS[step];
@@ -161,11 +163,7 @@ function ProcessingScreen({ soloId, onComplete, onFailed }: {
               ]}>
                 {isCompleted && <Ionicons name="checkmark" size={10} color={Colors.bg} />}
               </View>
-              <Text style={[
-                styles.stepLabel,
-                isCompleted && styles.stepLabelCompleted,
-                isActive && styles.stepLabelActive,
-              ]}>{info.label}</Text>
+              <Text variant="bodySmall" color={isActive ? Colors.accent : isCompleted ? 'rgba(255, 255, 255, 0.6)' : 'rgba(255, 255, 255, 0.3)'}>{info.label}</Text>
             </View>
           );
         })}
@@ -426,15 +424,15 @@ export default function RecordScreen() {
         <SoloHeader />
         <View style={styles.permissionBox}>
           <Ionicons name="mic-off" size={48} color={Colors.accent} />
-          <Text style={styles.permissionTitle}>Microphone Access Required</Text>
-          <Text style={styles.permissionText}>
+          <Text variant="h3" align="center">Microphone Access Required</Text>
+          <Text variant="body" color={Colors.textDim} align="center">
             Solo needs access to your microphone to record audio.
           </Text>
           <Pressable
             onPress={() => Audio.requestPermissionsAsync().then(({ granted }) => setPermissionGranted(granted))}
             style={styles.permissionBtn}
           >
-            <Text style={styles.permissionBtnText}>Grant Access</Text>
+            <Text variant="label" color={Colors.bg} bold>Grant Access</Text>
           </Pressable>
         </View>
       </View>
@@ -451,15 +449,15 @@ export default function RecordScreen() {
               <Ionicons name="alert-circle" size={36} color="#fff" />
             </View>
           </View>
-          <Text style={styles.processingTitle}>Processing Failed</Text>
-          <Text style={styles.processingSubtitle}>{failedInfo.error}</Text>
+          <Text variant="h3" align="center">Processing Failed</Text>
+          <Text variant="body" color={Colors.textDim} align="center">{failedInfo.error}</Text>
           <View style={styles.failedActions}>
             <Pressable onPress={handleRetry} style={styles.retryBtn}>
               <Ionicons name="refresh" size={20} color={Colors.bg} />
-              <Text style={styles.retryBtnText}>Retry</Text>
+              <Text variant="label" color={Colors.bg} bold>Retry</Text>
             </Pressable>
             <Pressable onPress={resetAll} style={styles.discardBtn}>
-              <Text style={styles.discardBtnText}>Discard</Text>
+              <Text variant="body" color={Colors.textDim}>Discard</Text>
             </Pressable>
           </View>
         </View>
@@ -514,7 +512,7 @@ export default function RecordScreen() {
           {isActiveRecording && segmentCount > 1 && (
             <View style={styles.segmentIndicator}>
               <MaterialCommunityIcons name="layers-outline" size={14} color={Colors.accent} />
-              <Text style={styles.segmentText}>Segment {segmentCount}</Text>
+              <Text variant="caption" color={Colors.accent}>Segment {segmentCount}</Text>
             </View>
           )}
 
@@ -524,8 +522,8 @@ export default function RecordScreen() {
             ))}
           </View>
 
-          <Text style={styles.timer}>{formatDuration(recordingDuration)}</Text>
-          <Text style={styles.timerLabel}>
+          <Text variant="display" style={styles.timer}>{formatDuration(recordingDuration)}</Text>
+          <Text variant="overline" color={Colors.textDim}>
             {phase === 'recording' ? 'Recording...' : phase === 'paused' ? 'Paused' : 'Tap to start'}
           </Text>
 
@@ -556,12 +554,12 @@ export default function RecordScreen() {
             {isActiveRecording && (
               <Pressable onPress={stopRecording} style={styles.doneBtn}>
                 <Ionicons name="checkmark" size={22} color={Colors.accent} />
-                <Text style={styles.doneBtnText}>Done</Text>
+                <Text variant="caption" color={Colors.accent} style={{ marginTop: -2, fontSize: 9 }}>Done</Text>
               </Pressable>
             )}
           </View>
 
-          <Text style={styles.durationHint}>
+          <Text variant="caption" color={Colors.textMuted} style={{ marginTop: Spacing.lg }}>
             {phase === 'recording'
               ? `Max ${formatDuration(MAX_DURATION_MS)}`
               : phase === 'paused'
@@ -585,89 +583,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,
-    gap: 12,
-  },
-  permissionTitle: {
-    color: Colors.text,
-    fontSize: 20,
-    fontFamily: 'DMSans_700Bold',
-    textAlign: 'center',
-  },
-  permissionText: {
-    color: Colors.textDim,
-    fontSize: 15,
-    fontFamily: 'DMSans_400Regular',
-    textAlign: 'center',
-    lineHeight: 22,
+    gap: Spacing.md,
   },
   permissionBtn: {
     backgroundColor: Colors.accent,
-    paddingHorizontal: 28,
-    paddingVertical: 12,
-    borderRadius: 24,
-    marginTop: 8,
-  },
-  permissionBtnText: {
-    color: Colors.bg,
-    fontSize: 15,
-    fontFamily: 'DMSans_700Bold',
+    paddingHorizontal: Spacing.xxl,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.pill,
+    marginTop: Spacing.sm,
   },
   recordContainer: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: Spacing.xl,
   },
   toolsRow: {
-    gap: 8,
-    paddingTop: 8,
+    gap: Spacing.sm,
+    paddingTop: Spacing.sm,
   },
   centerArea: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    gap: Spacing.md,
   },
   segmentIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     backgroundColor: 'rgba(255, 215, 0, 0.08)',
-    paddingHorizontal: 12,
+    paddingHorizontal: Spacing.md,
     paddingVertical: 5,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(255, 215, 0, 0.15)',
-  },
-  segmentText: {
-    color: Colors.accent,
-    fontSize: 12,
-    fontFamily: 'DMSans_600SemiBold',
   },
   waveformLive: {
     flexDirection: 'row',
     alignItems: 'center',
     height: 60,
     gap: 2,
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
   timer: {
-    color: Colors.text,
-    fontSize: 48,
-    fontFamily: 'DMSans_700Bold',
     fontVariant: ['tabular-nums'],
-  },
-  timerLabel: {
-    color: Colors.textDim,
-    fontSize: 14,
-    fontFamily: 'DMSans_500Medium',
-    textTransform: 'uppercase' as const,
-    letterSpacing: 1,
   },
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 28,
-    marginTop: 20,
+    marginTop: Spacing.xl,
   },
   recBtnContainer: {
     width: 100,
@@ -714,23 +679,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 215, 0, 0.3)',
   },
-  doneBtnText: {
-    color: Colors.accent,
-    fontSize: 9,
-    fontFamily: 'DMSans_700Bold',
-    marginTop: -2,
-  },
-  durationHint: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: 'DMSans_400Regular',
-    marginTop: 16,
-  },
   processingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 20,
+    gap: Spacing.xl,
     paddingHorizontal: 40,
   },
   processingCircleWrap: {
@@ -738,7 +691,7 @@ const styles = StyleSheet.create({
     height: 120,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   processingPulse: {
     position: 'absolute',
@@ -756,27 +709,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 2,
   },
-  processingTitle: {
-    color: Colors.text,
-    fontSize: 20,
-    fontFamily: 'DMSans_700Bold',
-    textAlign: 'center',
-  },
-  processingSubtitle: {
-    color: Colors.textDim,
-    fontSize: 14,
-    fontFamily: 'DMSans_400Regular',
-    textAlign: 'center',
-  },
   stepsContainer: {
-    marginTop: 24,
-    gap: 12,
+    marginTop: Spacing.xxl,
+    gap: Spacing.md,
     alignSelf: 'stretch',
   },
   stepRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Spacing.md,
   },
   stepDot: {
     width: 20,
@@ -796,46 +737,25 @@ const styles = StyleSheet.create({
     borderColor: Colors.accent,
     borderWidth: 2,
   },
-  stepLabel: {
-    color: 'rgba(255, 255, 255, 0.3)',
-    fontSize: 13,
-    fontFamily: 'DMSans_500Medium',
-  },
-  stepLabelCompleted: {
-    color: 'rgba(255, 255, 255, 0.6)',
-  },
-  stepLabelActive: {
-    color: Colors.accent,
-  },
   failedActions: {
     flexDirection: 'row',
-    gap: 16,
-    marginTop: 12,
+    gap: Spacing.lg,
+    marginTop: Spacing.md,
   },
   retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Spacing.sm,
     backgroundColor: Colors.accent,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
-  },
-  retryBtnText: {
-    color: Colors.bg,
-    fontSize: 15,
-    fontFamily: 'DMSans_700Bold',
+    paddingHorizontal: Spacing.xxl,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.pill,
   },
   discardBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  discardBtnText: {
-    color: Colors.textDim,
-    fontSize: 15,
-    fontFamily: 'DMSans_500Medium',
   },
 });
