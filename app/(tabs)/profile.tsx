@@ -1,9 +1,10 @@
 import React, { useCallback, useState, useMemo } from 'react';
-import { StyleSheet, View, Text, Pressable, FlatList, Platform, Alert, TextInput as RNTextInput, ActivityIndicator, RefreshControl } from 'react-native';
+import { StyleSheet, View, Text, Pressable, FlatList, Platform, Alert, TextInput as RNTextInput, ActivityIndicator, RefreshControl, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import { Ionicons, Feather } from '@expo/vector-icons';
+import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import Avatar from '@/components/Avatar';
@@ -55,7 +56,34 @@ function serverSoloToPost(solo: ServerSolo): AudioPost {
     comments: [],
     createdAt: new Date(solo.timestamp).getTime(),
     waveformData: generateWaveform(),
+    tags: solo.tags || [],
   };
+}
+
+const CATEGORY_OPTIONS = [
+  'Sports', 'Politics', 'Business', 'Religion', 'Pop Culture',
+  'Tech', 'Lifestyle', 'Music', 'Comedy', 'Health', 'News', 'Education',
+];
+
+async function authApiFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  const baseUrl = getApiUrl();
+  const url = new URL(path, baseUrl).toString();
+  const sessionCookie = await AsyncStorage.getItem('solo_auth_session');
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string> || {}),
+  };
+  if (sessionCookie) {
+    headers['X-Session-Token'] = sessionCookie;
+    if (Platform.OS !== 'web') {
+      headers['Cookie'] = sessionCookie;
+    }
+  }
+  const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
+  return fetchFn(url, {
+    ...options,
+    headers,
+    credentials: 'include' as RequestCredentials,
+  } as any);
 }
 
 export default function ProfileScreen() {
@@ -68,6 +96,12 @@ export default function ProfileScreen() {
   const [editBio, setEditBio] = useState(currentUser.bio);
   const [editAvatarUri, setEditAvatarUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const [menuPostId, setMenuPostId] = useState<string | null>(null);
+  const [editingSoloId, setEditingSoloId] = useState<string | null>(null);
+  const [editSoloTitle, setEditSoloTitle] = useState('');
+  const [editSoloTags, setEditSoloTags] = useState<string[]>([]);
+  const [savingSolo, setSavingSolo] = useState(false);
 
   const userId = authUser?.id;
 
@@ -94,6 +128,81 @@ export default function ProfileScreen() {
     await refetch();
     queryClient.invalidateQueries({ queryKey: ['/api/solos'] });
   }, [refetch, queryClient]);
+
+  const handleDeleteSolo = useCallback((soloId: string) => {
+    setMenuPostId(null);
+    const doDelete = async () => {
+      try {
+        const res = await authApiFetch(`/api/solos/${soloId}`, { method: 'DELETE' });
+        if (!res.ok) {
+          const data = await res.json();
+          Alert.alert('Error', data.error || 'Failed to delete');
+          return;
+        }
+        if (Platform.OS !== 'web') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        queryClient.invalidateQueries({ queryKey: ['/api/solos/user', userId] });
+        queryClient.invalidateQueries({ queryKey: ['/api/solos'] });
+      } catch (e: any) {
+        Alert.alert('Error', e.message || 'Failed to delete');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to delete this Solo? This cannot be undone.')) {
+        doDelete();
+      }
+    } else {
+      Alert.alert('Delete Solo', 'Are you sure you want to delete this Solo? This cannot be undone.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: doDelete },
+      ]);
+    }
+  }, [queryClient, userId]);
+
+  const handleStartEditSolo = useCallback((soloId: string) => {
+    setMenuPostId(null);
+    const solo = serverSolos.find(s => s.id === soloId);
+    if (solo) {
+      setEditingSoloId(soloId);
+      setEditSoloTitle(solo.title);
+      setEditSoloTags(solo.tags || []);
+    }
+  }, [serverSolos]);
+
+  const handleSaveEditSolo = useCallback(async () => {
+    if (!editingSoloId || !editSoloTitle.trim()) return;
+    setSavingSolo(true);
+    try {
+      const res = await authApiFetch(`/api/solos/${editingSoloId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editSoloTitle.trim(), tags: editSoloTags }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        Alert.alert('Error', data.error || 'Failed to save');
+        return;
+      }
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      setEditingSoloId(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/solos/user', userId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/solos'] });
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to save');
+    } finally {
+      setSavingSolo(false);
+    }
+  }, [editingSoloId, editSoloTitle, editSoloTags, queryClient, userId]);
+
+  const toggleEditTag = useCallback((tag: string) => {
+    setEditSoloTags(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    );
+  }, []);
 
   const pickImage = useCallback(async () => {
     if (Platform.OS !== 'web') {
@@ -316,13 +425,51 @@ export default function ProfileScreen() {
     </View>
   );
 
+  const renderPostItem = useCallback(({ item }: { item: AudioPost }) => (
+    <View>
+      <View style={pStyles.menuRow}>
+        <Pressable
+          onPress={() => {
+            if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setMenuPostId(menuPostId === item.id ? null : item.id);
+          }}
+          hitSlop={12}
+          style={pStyles.menuBtn}
+          testID={`post-menu-${item.id}`}
+        >
+          <Ionicons name="ellipsis-horizontal" size={20} color={Colors.textDim} />
+        </Pressable>
+      </View>
+      {menuPostId === item.id && (
+        <View style={pStyles.menuDropdown}>
+          <Pressable
+            onPress={() => handleStartEditSolo(item.id)}
+            style={pStyles.menuItem}
+          >
+            <Feather name="edit-2" size={16} color={Colors.text} />
+            <Text style={pStyles.menuItemText}>Edit</Text>
+          </Pressable>
+          <View style={pStyles.menuDivider} />
+          <Pressable
+            onPress={() => handleDeleteSolo(item.id)}
+            style={pStyles.menuItem}
+          >
+            <Ionicons name="trash-outline" size={16} color={Colors.danger} />
+            <Text style={[pStyles.menuItemText, { color: Colors.danger }]}>Delete</Text>
+          </Pressable>
+        </View>
+      )}
+      <SoundCard post={item} />
+    </View>
+  ), [menuPostId, handleStartEditSolo, handleDeleteSolo]);
+
   return (
     <View style={styles.container}>
       <SoloHeader />
       <FlatList
         data={myPosts}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <SoundCard post={item} />}
+        renderItem={renderPostItem}
         ListHeaderComponent={ProfileHeader}
         contentContainerStyle={{
           paddingBottom: Platform.OS === 'web' ? 84 : 100,
@@ -351,6 +498,69 @@ export default function ProfileScreen() {
           )
         }
       />
+
+      <Modal
+        visible={editingSoloId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditingSoloId(null)}
+      >
+        <Pressable style={pStyles.modalOverlay} onPress={() => setEditingSoloId(null)}>
+          <Pressable style={pStyles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={pStyles.modalHeader}>
+              <Text style={pStyles.modalTitle}>Edit Solo</Text>
+              <Pressable onPress={() => setEditingSoloId(null)} hitSlop={12}>
+                <Ionicons name="close" size={24} color={Colors.textDim} />
+              </Pressable>
+            </View>
+
+            <Text style={pStyles.fieldLabel}>Title</Text>
+            <RNTextInput
+              style={pStyles.titleInput}
+              value={editSoloTitle}
+              onChangeText={setEditSoloTitle}
+              placeholder="Title"
+              placeholderTextColor={Colors.textMuted}
+              maxLength={100}
+            />
+
+            <Text style={[pStyles.fieldLabel, { marginTop: 16 }]}>Categories</Text>
+            <View style={pStyles.tagsWrap}>
+              {CATEGORY_OPTIONS.map(tag => (
+                <Pressable
+                  key={tag}
+                  onPress={() => toggleEditTag(tag)}
+                  style={[pStyles.tagChip, editSoloTags.includes(tag) && pStyles.tagChipActive]}
+                >
+                  <Text style={[pStyles.tagText, editSoloTags.includes(tag) && pStyles.tagTextActive]}>
+                    {tag}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={pStyles.modalActions}>
+              <Pressable
+                onPress={() => setEditingSoloId(null)}
+                style={pStyles.modalCancelBtn}
+              >
+                <Text style={pStyles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleSaveEditSolo}
+                style={[pStyles.modalSaveBtn, savingSolo && { opacity: 0.7 }]}
+                disabled={savingSolo || !editSoloTitle.trim()}
+              >
+                {savingSolo ? (
+                  <ActivityIndicator size="small" color={Colors.bg} />
+                ) : (
+                  <Text style={pStyles.modalSaveText}>Save</Text>
+                )}
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -539,5 +749,144 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'DMSans_400Regular',
     textAlign: 'center',
+  },
+});
+
+const pStyles = StyleSheet.create({
+  menuRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 0,
+  },
+  menuBtn: {
+    padding: 6,
+  },
+  menuDropdown: {
+    marginHorizontal: 16,
+    marginBottom: 4,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    overflow: 'hidden',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  menuItemText: {
+    color: Colors.text,
+    fontSize: 15,
+    fontFamily: 'DMSans_500Medium',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    marginHorizontal: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    color: Colors.text,
+    fontSize: 20,
+    fontFamily: 'DMSans_700Bold',
+  },
+  fieldLabel: {
+    color: Colors.accent,
+    fontSize: 12,
+    fontFamily: 'DMSans_600SemiBold',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  titleInput: {
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: Colors.text,
+    fontSize: 16,
+    fontFamily: 'DMSans_400Regular',
+  },
+  tagsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  tagChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: Colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  tagChipActive: {
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    borderColor: Colors.accent,
+  },
+  tagText: {
+    color: Colors.textDim,
+    fontSize: 13,
+    fontFamily: 'DMSans_500Medium',
+  },
+  tagTextActive: {
+    color: Colors.accent,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 24,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.textMuted,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: Colors.textDim,
+    fontSize: 15,
+    fontFamily: 'DMSans_600SemiBold',
+  },
+  modalSaveBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.accent,
+    alignItems: 'center',
+  },
+  modalSaveText: {
+    color: Colors.bg,
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
   },
 });
