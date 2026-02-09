@@ -28,8 +28,9 @@ Preferred communication style: Simple, everyday language.
 - **File Uploads**: `multer` handles uploads for avatars and audio files.
 - **CORS**: Dynamically configured to support development and deployment environments.
 - **Static Serving**: Serves the Expo web build in production; proxies to Metro bundler in development.
-- **Admin Portal**: A web-based interface at `/admin` for reports, user management, documentation management, system integrations, processing job debugging, and client error reporting.
-- **Logging & Tracing**: Structured logging with request IDs for correlation and client telemetry for error reporting.
+- **Admin Portal**: A web-based interface at `/admin` for reports, user management, documentation management, system integrations, processing job debugging, client error reporting, and system health monitoring.
+- **Logging & Tracing**: Structured logging with request IDs (X-Request-Id header) for correlation, client telemetry for error reporting, and persistent event/request logging to database.
+- **System Monitoring**: Health checks (DB, sessions, storage, FFmpeg, transcription), event logging with redaction, request audit trail, and admin-controlled verbose logging.
 
 ### Database Schema (Drizzle ORM)
 - **ORM**: Drizzle ORM with PostgreSQL.
@@ -39,6 +40,8 @@ Preferred communication style: Simple, everyday language.
     - `solos`: Stores audio post metadata, including processing status, transcript, and error information.
     - `app_docs`: Manages application documentation.
     - `system_integrations`: Stores configurations for external services.
+    - `system_events`: Structured event log with level, source, redacted details, and resolution tracking.
+    - `request_logs`: HTTP request audit trail for errors and verbose-mode logging.
 - **Validation**: Zod schemas generated from Drizzle definitions.
 - **Migrations**: Managed via `drizzle-kit`.
 - **Connection**: Configured via `DATABASE_URL` environment variable.
