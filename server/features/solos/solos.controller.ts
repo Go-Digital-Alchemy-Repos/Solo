@@ -48,11 +48,14 @@ export async function create(req: Request, res: Response) {
     displayName: user.username,
   });
 
-  solosService.generateTranscript(solo.id, filePath, solo.durationMs).catch(err => {
-    console.error("Background transcription failed:", err);
-  });
+  let transcript = null;
+  try {
+    transcript = await solosService.generateTranscript(solo.id, filePath, solo.durationMs);
+  } catch (err) {
+    console.error("Transcription failed:", err);
+  }
 
-  return res.status(201).json(solo);
+  return res.status(201).json({ ...solo, transcript });
 }
 
 export async function list(req: Request, res: Response) {
