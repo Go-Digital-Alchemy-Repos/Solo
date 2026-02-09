@@ -14,6 +14,9 @@ export const users = pgTable("users", {
   bio: text("bio").default(""),
   isAdmin: boolean("is_admin").default(false).notNull(),
   role: text("role").default("user").notNull(),
+  isDisabled: boolean("is_disabled").default(false).notNull(),
+  disabledAt: timestamp("disabled_at"),
+  disabledReason: text("disabled_reason"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -166,6 +169,39 @@ export const requestLogs = pgTable("request_logs", {
 
 export type SystemEvent = typeof systemEvents.$inferSelect;
 export type RequestLog = typeof requestLogs.$inferSelect;
+
+export const userPasswordResets = pgTable("user_password_resets", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdByAdminId: varchar("created_by_admin_id"),
+}, (table) => [
+  index("password_resets_user_idx").on(table.userId),
+  index("password_resets_expires_idx").on(table.expiresAt),
+]);
+
+export const adminAuditLog = pgTable("admin_audit_log", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  adminUserId: varchar("admin_user_id").notNull(),
+  action: text("action").notNull(),
+  targetUserId: varchar("target_user_id"),
+  details: jsonb("details"),
+}, (table) => [
+  index("audit_log_created_idx").on(table.createdAt),
+  index("audit_log_action_idx").on(table.action),
+  index("audit_log_target_idx").on(table.targetUserId),
+]);
+
+export type UserPasswordReset = typeof userPasswordResets.$inferSelect;
+export type AdminAuditLogEntry = typeof adminAuditLog.$inferSelect;
 
 export const conversations = pgTable("conversations", {
   id: serial("id").primaryKey(),
