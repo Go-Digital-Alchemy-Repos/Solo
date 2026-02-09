@@ -9,7 +9,7 @@ import * as path from "path";
 import { DOCS_DIR } from "../../utils/paths";
 
 export async function login(req: Request, res: Response) {
-  const { email, password } = req.body;
+  const { email, password } = req.body || {};
   if (!email || !password) {
     throw AppError.badRequest("Email and password required");
   }
@@ -85,7 +85,7 @@ export async function updateUser(req: Request, res: Response) {
   if (!adminId) return;
 
   const { userId } = req.params;
-  const { username, bio, isAdmin } = req.body;
+  const { username, bio, isAdmin } = req.body || {};
 
   const updates: any = {};
   if (username !== undefined) updates.username = username;
@@ -284,7 +284,7 @@ export async function saveIntegration(req: Request, res: Response) {
   const userId = await requireAdmin(req, res);
   if (!userId) return;
 
-  const { service, config, enabled } = req.body;
+  const { service, config, enabled } = req.body || {};
   const validServices: integrationsService.ServiceName[] = ["mailgun", "cloudflare_r2", "twilio"];
 
   if (!validServices.includes(service)) {

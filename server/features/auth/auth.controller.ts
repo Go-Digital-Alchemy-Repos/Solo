@@ -7,7 +7,7 @@ import * as path from "path";
 import { AVATARS_DIR } from "../../utils/paths";
 
 export async function signup(req: Request, res: Response) {
-  const { email, password } = req.body;
+  const { email, password } = req.body || {};
   if (!email || !password) {
     throw AppError.badRequest("Email and password are required");
   }
@@ -37,7 +37,7 @@ export async function signup(req: Request, res: Response) {
 }
 
 export async function login(req: Request, res: Response) {
-  const { email, password } = req.body;
+  const { email, password } = req.body || {};
   if (!email || !password) {
     throw AppError.badRequest("Email and password are required");
   }
