@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { solos, users } from "@shared/schema";
 import type { Transcript } from "@shared/schema";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
@@ -366,14 +366,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/solos", async (_req, res) => {
+  app.get("/api/solos", async (req, res) => {
     try {
-      const latestSolos = await db
-        .select()
-        .from(solos)
-        .orderBy(desc(solos.timestamp))
-        .limit(20);
+      const tag = req.query.tag as string | undefined;
 
+      const baseQuery = db.select().from(solos);
+      const latestSolos = tag
+        ? await baseQuery.where(sql`${tag} = ANY(${solos.tags})`).orderBy(desc(solos.timestamp)).limit(50)
+        : await baseQuery.orderBy(desc(solos.timestamp)).limit(50);
       return res.json(latestSolos);
     } catch (error) {
       console.error("Error fetching solos:", error);
