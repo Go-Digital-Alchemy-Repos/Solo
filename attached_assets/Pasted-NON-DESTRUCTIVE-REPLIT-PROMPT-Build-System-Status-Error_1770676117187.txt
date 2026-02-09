@@ -1,0 +1,186 @@
+NON-DESTRUCTIVE REPLIT PROMPT — Build “System Status” + “Errors & Debugging” Admin Area (Expo + Express + Postgres/Drizzle)
+
+You are working in an existing monorepo with:
+- Expo (React Native) frontend using expo-router (app/…)
+- Express backend (server/…)
+- PostgreSQL + Drizzle schema in shared/schema.ts
+- Existing auth/session system (express-session + connect-pg-simple)
+DO NOT remove or rewrite working features. Make additive changes only. Preserve existing routes and UI patterns. Keep styling consistent with the app’s dark theme + gold accent + DM Sans typography.
+
+GOAL
+Create a new Admin area called “System Status” that allows an authenticated admin to:
+1) Monitor database + backend subsystems health in real time
+2) View Errors & Debugging in a centralized place (recent errors, processing failures, request logs, and tools to resolve/retry safely)
+
+HIGH-LEVEL REQUIREMENTS
+A) Admin UI
+- Add a new Admin screen/route: Admin → System Status
+- Inside it add two tabs (or segmented control):
+  1) Health
+  2) Errors & Debugging
+- Add this new destination to the existing Admin navigation (wherever admin links live).
+- UI must match existing design primitives and patterns:
+  - dark background, gold accent, DM Sans
+  - consistent spacing/typography, cards, subtle separators, skeleton loaders, empty states
+  - pull-to-refresh + auto-refresh toggle
+- Ensure all network calls use the same auth/session mechanism as the rest of the app.
+
+B) Backend API (non-destructive, additive)
+Create a new feature module: server/routes/systemStatus.routes.ts
+Mount under: /api/admin/system-status/...
+Protect all endpoints with admin authorization (do not assume any user is admin).
+If there is no admin role today:
+- Add a minimal “isAdmin” boolean to users table (default false), and a server-side helper requireAdmin middleware.
+- Do not break existing auth; this is additive. Document how to set an admin user manually (SQL snippet).
+
+C) Database (Drizzle)
+Add new tables for centralized debugging (keep minimal, extensible):
+1) system_events (generic app events and errors)
+- id (uuid)
+- createdAt (timestamp)
+- level (enum: info | warn | error)
+- source (text) e.g., "api", "soloProcessor", "ffmpeg", "transcription", "db"
+- eventType (text) e.g., "REQUEST_ERROR", "JOB_FAILED", "UPLOAD_FAILED"
+- message (text)
+- details (jsonb) optional (safe; do not store secrets)
+- requestId (text) optional
+- userId (fk) optional
+- soloId (fk) optional (if relevant)
+- resolvedAt (timestamp) optional
+- resolvedByUserId (fk) optional
+- resolutionNote (text) optional
+
+2) request_logs (optional but helpful; keep lightweight)
+- id (uuid)
+- createdAt
+- requestId
+- method
+- path
+- status
+- durationMs
+- userId nullable
+- ip nullable (if available)
+- userAgent nullable (if available)
+
+If the repo already has processing status fields for solos (queued/processing/failed), reuse them and do not duplicate. Otherwise, store job failures into system_events so the Admin can see them.
+
+D) Health Checks (what to monitor)
+Implement a single aggregated endpoint returning a structured object with these health signals:
+- server: uptime, environment, version/build hash if available
+- db: connectivity + basic query latency (SELECT 1 timing)
+- sessions: ability to read/write a trivial session-related query (or confirm connect-pg-simple table exists and is reachable)
+- storage: ability to read/write in uploads/ (or storage adapter if exists)
+- ffmpeg: verify ffmpeg is installed and runnable (run `ffmpeg -version` once at startup cache result, and optionally run a tiny no-op command)
+- transcription: configuration status only (do NOT call OpenAI every refresh); confirm API key presence + model configured; optionally provide a “Test Transcription” button that runs a small safe call behind admin-only control with rate limiting.
+
+E) Errors & Debugging (central monitor)
+- Show:
+  - Recent system_events (filter by level, source, resolved/unresolved)
+  - Recent failed solos/jobs (if tracked) with error, step, attempts, timestamps
+  - Recent request_logs (filter by status >= 400)
+- Actions (admin-only):
+  - Mark event as “Resolved” with a resolution note
+  - Retry a failed solo processing job (call existing retry endpoint if present; if not, implement /api/admin/system-status/solos/:id/retry that safely re-queues)
+  - “Export” events to JSON (download or share view on mobile; can simply render and allow copy)
+  - Toggle “Verbose logging” (DEV only): when enabled, store more request logs (but do not store bodies or secrets)
+
+SECURITY REQUIREMENTS
+- All endpoints are admin-only.
+- Never store credentials, cookies, auth headers, raw request bodies, or OpenAI keys in logs.
+- Redact sensitive fields in `details` (e.g., tokens, authorization headers, cookies, passwords).
+- Add rate limits to admin debug endpoints (even simple in-memory is fine for now).
+- Ensure stable, consistent response shapes:
+  { ok: true, data: ... } and { ok: false, error: { code, message, details? } }
+
+IMPLEMENTATION STEPS (DO THESE IN ORDER)
+
+1) DB/Schema (shared/schema.ts)
+- Add isAdmin to users (boolean default false) if not present.
+- Add system_events and request_logs tables as described, with indexes:
+  - system_events: (createdAt desc), (level), (source), (resolvedAt)
+  - request_logs: (createdAt desc), (status), (path)
+
+2) Server middleware for observability
+- Create server/middleware/requestLogging.ts:
+  - Generate requestId (uuid) per request and attach to req + response header.
+  - Measure durationMs, capture method/path/status.
+  - Insert into request_logs only when:
+    - status >= 400 OR
+    - a feature flag VERBOSE_REQUEST_LOGS=true
+- Create server/lib/eventLogger.ts:
+  - function logEvent(level, source, eventType, message, details?, ctx?)
+  - ctx includes requestId/userId/soloId
+  - Redaction function to remove secrets from details.
+
+3) Health checker service
+- Create server/services/healthCheck.ts returning:
+  - server info (uptimeSeconds, nodeVersion, env)
+  - db info (ok, latencyMs, error?)
+  - storage info (ok, error?)
+  - ffmpeg info (ok, version string if available)
+  - transcription config info (ok if API key set; model name)
+- Cache expensive checks (ffmpeg version) for 5–10 minutes.
+
+4) Admin routes
+- Create server/routes/systemStatus.routes.ts with:
+  GET  /api/admin/system-status/health
+  GET  /api/admin/system-status/events?level=&source=&resolved=&limit=&cursor=
+  POST /api/admin/system-status/events/:eventId/resolve  { resolutionNote }
+  GET  /api/admin/system-status/request-logs?minStatus=&path=&limit=&cursor=
+  POST /api/admin/system-status/solos/:soloId/retry   (only if retry exists or can be implemented safely)
+  POST /api/admin/system-status/transcription/test   (optional, admin-only, rate-limited; small safe call)
+- Add requireAdmin middleware:
+  - requireAuth first, then check user.isAdmin === true.
+  - If the user model doesn’t load isAdmin yet, extend the session user fetch accordingly.
+
+5) Wire routes
+- Register the new routes module without breaking existing routing:
+  - If routes are in server/routes.ts, import and mount.
+  - If already modularized, mount in routes/index.ts.
+
+6) Admin UI
+- Add a new screen in app/… consistent with current routing conventions (expo-router).
+  Example route:
+  - app/(admin)/system-status.tsx or app/admin/system-status.tsx depending on your current admin structure.
+- Add navigation link “System Status” in Admin menu.
+- Build UI with two tabs:
+  TAB 1: Health
+    - Cards: Database, Storage, ffmpeg, Transcription config, Server
+    - Each card shows: status badge (OK/Degraded/Down), last checked time, latency where relevant, and small details.
+    - Auto-refresh every 10–30 seconds with toggle + manual refresh.
+  TAB 2: Errors & Debugging
+    - Section A: Unresolved Events list
+      - Filters: Level (error/warn/info), Source, Resolved toggle
+      - Each item shows: timestamp, source, message, requestId, related soloId/userId if present
+      - Actions: Resolve (opens modal, adds note)
+    - Section B: Failed Solos/Jobs (if available)
+      - List failed items with retry button
+    - Section C: Request Errors
+      - List recent status>=400 request logs with path, status, duration, requestId
+- Add skeleton loading states + empty states.
+- Add “Copy JSON” button for event details.
+
+7) Documentation
+- Add a Docs entry:
+  - “System Status & Debugging”
+  - How to grant admin (SQL snippet)
+  - What is logged, what is redacted
+  - How to retry failed processing
+  - Common failure modes (db down, ffmpeg missing, OpenAI key missing)
+
+QUALITY BAR / ACCEPTANCE CRITERIA
+- Existing app behavior remains intact.
+- New Admin page loads for admins only; non-admins get 403 with standard error shape.
+- Health endpoint returns quickly (<500ms typical) and does not spam external APIs.
+- Errors list renders, filters work, resolving an event updates it immediately.
+- RequestId appears in server responses; when an error occurs, it logs a system_event with the requestId.
+- No secrets are stored in DB logs.
+- UI looks consistent and premium with current theme.
+
+DELIVERABLES
+- Updated shared/schema.ts + migrations
+- New server middleware/services/routes
+- New Admin UI route + navigation link
+- Docs update
+
+Proceed step-by-step, run typechecks/tests, and keep changes small and safe. If any refactor is needed, do the minimal refactor required and document it.
