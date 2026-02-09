@@ -94,7 +94,7 @@ function ProcessingScreen() {
         </View>
       </View>
       <Text style={styles.processingTitle}>Processing your Solo</Text>
-      <Text style={styles.processingSubtitle}>Trimming, mixing & uploading...</Text>
+      <Text style={styles.processingSubtitle}>Trimming, mixing & transcribing...</Text>
     </View>
   );
 }
@@ -278,6 +278,7 @@ export default function RecordScreen() {
     }
 
     setIsPosting(true);
+    setPhase('processing');
 
     try {
       await uploadAndPost({
@@ -297,6 +298,7 @@ export default function RecordScreen() {
     } catch (e: any) {
       console.error('Failed to upload:', e?.message || e, e?.stack);
       setIsPosting(false);
+      setPhase('editing');
       Alert.alert('Upload Failed', 'Could not upload your recording. Please try again.');
     }
   }, [recordedUri, uploadAndPost, resetAll]);
