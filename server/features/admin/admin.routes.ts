@@ -1,6 +1,7 @@
 import { Router } from "express";
 import * as adminController from "./admin.controller";
 import { asyncHandler } from "../../middleware/errorHandler";
+import systemStatusRoutes from "./systemStatus.routes";
 
 const router = Router();
 
@@ -24,5 +25,7 @@ router.get("/processing-jobs", asyncHandler(adminController.listProcessingJobs))
 router.post("/processing-jobs/:soloId/retry", asyncHandler(adminController.retryProcessingJob));
 router.post("/processing-jobs/:soloId/fail", asyncHandler(adminController.markJobFailed));
 router.post("/processing-jobs/:soloId/reset", asyncHandler(adminController.resetJob));
+
+router.use("/system-status", systemStatusRoutes);
 
 export default router;

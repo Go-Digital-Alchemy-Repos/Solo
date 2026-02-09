@@ -36,6 +36,10 @@ export class AppError extends Error {
     return new AppError({ status: 409, code: "CONFLICT", message });
   }
 
+  static tooManyRequests(message = "Too many requests") {
+    return new AppError({ status: 429, code: "TOO_MANY_REQUESTS", message });
+  }
+
   static internal(message = "Internal server error") {
     return new AppError({ status: 500, code: "INTERNAL_ERROR", message });
   }

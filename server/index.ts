@@ -115,6 +115,22 @@ function setupRequestLogging(app: express.Application) {
         durationMs,
         userId: userId || undefined,
       });
+
+      const verbose = process.env.VERBOSE_REQUEST_LOGS === "true";
+      if (res.statusCode >= 400 || verbose) {
+        import("./lib/requestLogWriter").then(({ writeRequestLog }) => {
+          writeRequestLog({
+            requestId,
+            method: req.method,
+            path: reqPath,
+            status: res.statusCode,
+            durationMs,
+            userId: userId || undefined,
+            ip: req.ip || req.socket?.remoteAddress || undefined,
+            userAgent: req.headers["user-agent"] || undefined,
+          });
+        }).catch(() => {});
+      }
     });
 
     next();
