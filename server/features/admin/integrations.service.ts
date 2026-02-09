@@ -5,8 +5,9 @@ import Mailgun from "mailgun.js";
 import FormData from "form-data";
 import { S3Client, ListBucketsCommand } from "@aws-sdk/client-s3";
 import twilio from "twilio";
+import Stripe from "stripe";
 
-export type ServiceName = "mailgun" | "cloudflare_r2" | "twilio";
+export type ServiceName = "mailgun" | "cloudflare_r2" | "twilio" | "stripe";
 
 export interface MailgunConfig {
   apiKey: string;
@@ -26,6 +27,13 @@ export interface TwilioConfig {
   accountSid: string;
   authToken: string;
   phoneNumber: string;
+}
+
+export interface StripeConfig {
+  secretKey: string;
+  publishableKey: string;
+  webhookSecret: string;
+  mode: "test" | "live";
 }
 
 export async function getIntegration(service: ServiceName) {
@@ -62,6 +70,7 @@ function maskSecrets(service: ServiceName, config: Record<string, string>): Reco
     mailgun: ["apiKey"],
     cloudflare_r2: ["accessKeyId", "secretAccessKey"],
     twilio: ["authToken"],
+    stripe: ["secretKey", "webhookSecret"],
   };
 
   for (const field of secretFields[service] || []) {
@@ -84,6 +93,7 @@ export async function saveIntegration(service: ServiceName, config: Record<strin
       mailgun: ["apiKey"],
       cloudflare_r2: ["accessKeyId", "secretAccessKey"],
       twilio: ["authToken"],
+      stripe: ["secretKey", "webhookSecret"],
     };
 
     for (const field of secretFields[service] || []) {
@@ -134,6 +144,9 @@ export async function testIntegration(service: ServiceName): Promise<{ success: 
         break;
       case "twilio":
         result = await testTwilio(config as unknown as TwilioConfig);
+        break;
+      case "stripe":
+        result = await testStripe(config as unknown as StripeConfig);
         break;
       default:
         result = { success: false, message: "Unknown service" };
@@ -233,4 +246,23 @@ export function getR2Client(config: CloudflareR2Config) {
 
 export function getTwilioClient(config: TwilioConfig) {
   return twilio(config.accountSid, config.authToken);
+}
+
+async function testStripe(config: StripeConfig): Promise<{ success: boolean; message: string }> {
+  if (!config.secretKey) {
+    return { success: false, message: "Secret Key is required" };
+  }
+
+  const stripe = new Stripe(config.secretKey);
+  const account = await stripe.accounts.retrieve();
+
+  const mode = config.secretKey.startsWith("sk_test_") ? "Test" : "Live";
+  return {
+    success: true,
+    message: `Connected to ${account.business_profile?.name || account.id} (${mode} mode)`,
+  };
+}
+
+export function getStripeClient(config: StripeConfig) {
+  return new Stripe(config.secretKey);
 }
