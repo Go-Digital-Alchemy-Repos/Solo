@@ -7,9 +7,10 @@ import Colors from '@/constants/colors';
 interface SoloHeaderProps {
   absolute?: boolean;
   children?: React.ReactNode;
+  bottomContent?: React.ReactNode;
 }
 
-export default function SoloHeader({ absolute = false, children }: SoloHeaderProps) {
+export default function SoloHeader({ absolute = false, children, bottomContent }: SoloHeaderProps) {
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
@@ -26,7 +27,7 @@ export default function SoloHeader({ absolute = false, children }: SoloHeaderPro
         </View>
         {children && <View style={styles.right}>{children}</View>}
       </View>
-      <View style={styles.accent} />
+      {bottomContent}
     </View>
   );
 }
@@ -34,8 +35,8 @@ export default function SoloHeader({ absolute = false, children }: SoloHeaderPro
 const styles = StyleSheet.create({
   container: {
     backgroundColor: 'rgba(0, 0, 0, 0.92)',
-    paddingHorizontal: 20,
-    paddingBottom: 10,
+    paddingHorizontal: 0,
+    paddingBottom: 4,
     zIndex: 10,
   },
   absolute: {
@@ -48,6 +49,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 20,
   },
   logoRow: {
     flexDirection: 'row',
@@ -63,12 +65,5 @@ const styles = StyleSheet.create({
   right: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  accent: {
-    height: 2,
-    width: 40,
-    backgroundColor: Colors.accent,
-    borderRadius: 1,
-    marginTop: 4,
   },
 });

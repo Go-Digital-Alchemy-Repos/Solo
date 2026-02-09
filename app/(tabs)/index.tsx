@@ -5,13 +5,15 @@ import { Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import SoundCard from '@/components/SoundCard';
 import SoloHeader from '@/components/SoloHeader';
+import FeedTopicBar from '@/components/FeedTopicBar';
 import { useData } from '@/lib/data-context';
 
 export default function FeedScreen() {
   const insets = useSafeAreaInsets();
-  const { posts, refreshFeed } = useData();
+  const { posts, refreshFeed, feedTag, setFeedTag } = useData();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const [refreshing, setRefreshing] = useState(false);
+  const headerHeight = topInset + 90;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -27,7 +29,7 @@ export default function FeedScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <SoundCard post={item} />}
         contentContainerStyle={{
-          paddingTop: topInset + 56,
+          paddingTop: headerHeight,
           paddingBottom: Platform.OS === 'web' ? 84 : 100,
         }}
         showsVerticalScrollIndicator={false}
@@ -36,18 +38,25 @@ export default function FeedScreen() {
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor={Colors.accent}
-            progressViewOffset={topInset + 56}
+            progressViewOffset={headerHeight}
           />
         }
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="mic-outline" size={48} color={Colors.textMuted} />
             <Text style={styles.emptyTitle}>No solos yet</Text>
-            <Text style={styles.emptyText}>Record your first solo to get started</Text>
+            <Text style={styles.emptyText}>
+              {feedTag ? `No solos in ${feedTag} yet` : 'Record your first solo to get started'}
+            </Text>
           </View>
         }
       />
-      <SoloHeader absolute />
+      <SoloHeader
+        absolute
+        bottomContent={
+          <FeedTopicBar selectedTag={feedTag} onSelectTag={setFeedTag} />
+        }
+      />
     </View>
   );
 }

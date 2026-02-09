@@ -53,6 +53,7 @@ export interface AudioPost {
   createdAt: number;
   waveformData: number[];
   transcript: Transcript | null;
+  tags: string[];
 }
 
 interface DataContextValue {
@@ -78,6 +79,8 @@ interface DataContextValue {
   allUsers: UserProfile[];
   isUploading: boolean;
   refreshFeed: () => void;
+  feedTag: string | null;
+  setFeedTag: (tag: string | null) => void;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -126,6 +129,7 @@ function serverSoloToPost(solo: ServerSolo): AudioPost {
     createdAt: new Date(solo.timestamp).getTime(),
     waveformData: generateWaveform(),
     transcript: solo.transcript || null,
+    tags: solo.tags || [],
   };
 }
 
@@ -161,10 +165,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [localComments, setLocalComments] = useState<Record<string, Comment[]>>({});
   const [following, setFollowing] = useState<Set<string>>(new Set());
   const [isUploading, setIsUploading] = useState(false);
+  const [feedTag, setFeedTag] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
+  const solosQueryKey = feedTag ? `/api/solos?tag=${feedTag}` : '/api/solos';
   const { data: serverSolos = [] } = useQuery<ServerSolo[]>({
-    queryKey: ['/api/solos'],
+    queryKey: [solosQueryKey],
     refetchInterval: 10000,
     staleTime: 5000,
     refetchOnWindowFocus: true,
@@ -312,8 +318,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshFeed = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['/api/solos'] });
-  }, [queryClient]);
+    queryClient.invalidateQueries({ queryKey: [solosQueryKey] });
+  }, [queryClient, solosQueryKey]);
 
   const value = useMemo(() => ({
     currentUser,
@@ -330,7 +336,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     allUsers: [] as UserProfile[],
     isUploading,
     refreshFeed,
-  }), [currentUser, updateProfile, posts, addPost, uploadAndPost, toggleLike, addComment, following, toggleFollow, searchPosts, searchUsers, isUploading, refreshFeed]);
+    feedTag,
+    setFeedTag,
+  }), [currentUser, updateProfile, posts, addPost, uploadAndPost, toggleLike, addComment, following, toggleFollow, searchPosts, searchUsers, isUploading, refreshFeed, feedTag]);
 
   return (
     <DataContext.Provider value={value}>
