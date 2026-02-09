@@ -54,7 +54,10 @@ export default function VibeSelector({ selectedVibe, onSelect, isRecording }: Vi
 
   useEffect(() => {
     if (isRecording && selectedVibe) {
-      startVibePlayback(selectedVibe);
+      const timer = setTimeout(() => {
+        startVibePlayback(selectedVibe);
+      }, 300);
+      return () => clearTimeout(timer);
     } else if (!isRecording) {
       stopVibePreview();
     }

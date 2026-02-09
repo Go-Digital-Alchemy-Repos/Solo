@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { StyleSheet, View, Text, Pressable, Platform, PanResponder, LayoutChangeEvent, TextInput } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Platform, PanResponder, LayoutChangeEvent, TextInput, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,11 +12,16 @@ const BAR_COUNT = 80;
 const BAR_GAP = 1.5;
 const MIN_SELECTION_MS = 5000;
 
+const CATEGORY_OPTIONS = [
+  'Sports', 'Politics', 'Business', 'Religion', 'Pop Culture',
+  'Tech', 'Lifestyle', 'Music', 'Comedy', 'Health', 'News', 'Education',
+];
+
 interface WaveformTrimmerProps {
   audioUri: string;
   durationMs: number;
   onCancel: () => void;
-  onPost: (title: string, trimStartMs: number, trimEndMs: number) => void;
+  onPost: (title: string, trimStartMs: number, trimEndMs: number, tags: string[]) => void;
   isPosting: boolean;
   transcript?: { text: string; words: TranscriptWord[] } | null;
   segmentMarkers?: number[];
@@ -69,6 +74,7 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackPos, setPlaybackPos] = useState(0);
   const [title, setTitle] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const soundRef = useRef<Audio.Sound | null>(null);
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -269,13 +275,22 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
   }, [transcript, playbackSec, isPlaying]);
 
   const bubbleLeftPx = HANDLE_WIDTH + playbackFrac * trackWidth;
+  const toggleTag = useCallback((tag: string) => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setSelectedTags(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    );
+  }, []);
+
   const canPost = title.trim().length > 0 && selectionMs >= MIN_SELECTION_MS && !isPosting;
 
   const handlePost = useCallback(() => {
     if (!canPost) return;
     cleanupPlayback();
-    onPost(title.trim(), trimStartMs, trimEndMs);
-  }, [canPost, cleanupPlayback, onPost, title, trimStartMs, trimEndMs]);
+    onPost(title.trim(), trimStartMs, trimEndMs, selectedTags);
+  }, [canPost, cleanupPlayback, onPost, title, trimStartMs, trimEndMs, selectedTags]);
 
   const handleCancel = useCallback(() => {
     cleanupPlayback();
@@ -308,6 +323,26 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
         maxLength={80}
         returnKeyType="done"
       />
+
+      <View style={styles.tagSection}>
+        <Text style={styles.tagLabel}>Topics</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagScroll}>
+          {CATEGORY_OPTIONS.map(tag => {
+            const isSelected = selectedTags.includes(tag);
+            return (
+              <Pressable
+                key={tag}
+                onPress={() => toggleTag(tag)}
+                style={[styles.tagChip, isSelected && styles.tagChipActive]}
+              >
+                <Text style={[styles.tagChipText, isSelected && styles.tagChipTextActive]}>
+                  {tag}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       <View style={styles.timeRow}>
         <Text style={styles.timeLabel}>{formatTime(trimStartMs)}</Text>
@@ -468,6 +503,41 @@ const styles = StyleSheet.create({
     fontFamily: 'DMSans_400Regular',
     borderWidth: 1,
     borderColor: 'rgba(255, 215, 0, 0.1)',
+  },
+  tagSection: {
+    marginTop: 12,
+    gap: 6,
+  },
+  tagLabel: {
+    color: Colors.textDim,
+    fontSize: 12,
+    fontFamily: 'DMSans_600SemiBold',
+    paddingHorizontal: 16,
+  },
+  tagScroll: {
+    paddingHorizontal: 16,
+    gap: 6,
+  },
+  tagChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  tagChipActive: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
+  },
+  tagChipText: {
+    color: Colors.textDim,
+    fontSize: 12,
+    fontFamily: 'DMSans_500Medium',
+  },
+  tagChipTextActive: {
+    color: Colors.bg,
+    fontFamily: 'DMSans_700Bold',
   },
   timeRow: {
     flexDirection: 'row',

@@ -169,6 +169,11 @@ export default function RecordScreen() {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        interruptionModeIOS: 0,
+        shouldDuckAndroid: true,
+        interruptionModeAndroid: 1,
+        playThroughEarpieceAndroid: false,
       });
 
       const recording = new Audio.Recording();
@@ -267,7 +272,7 @@ export default function RecordScreen() {
     resetAll();
   }, [resetAll]);
 
-  const handlePost = useCallback(async (title: string, trimStartMs: number, trimEndMs: number) => {
+  const handlePost = useCallback(async (title: string, trimStartMs: number, trimEndMs: number, tags: string[]) => {
     if (!recordedUri) return;
     const effectiveDuration = trimEndMs - trimStartMs;
     if (effectiveDuration < MIN_DURATION_MS) {
@@ -286,6 +291,7 @@ export default function RecordScreen() {
         trimStartMs,
         trimEndMs,
         vibeId: selectedVibe || undefined,
+        tags: tags.length > 0 ? tags : undefined,
       });
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -420,8 +426,9 @@ export default function RecordScreen() {
             </View>
 
             {isActiveRecording && (
-              <Pressable onPress={stopRecording} style={styles.secondaryBtn}>
-                <View style={styles.stopIcon} />
+              <Pressable onPress={stopRecording} style={styles.doneBtn}>
+                <Ionicons name="checkmark" size={22} color={Colors.accent} />
+                <Text style={styles.doneBtnText}>Done</Text>
               </Pressable>
             )}
           </View>
@@ -430,7 +437,7 @@ export default function RecordScreen() {
             {phase === 'recording'
               ? `Max ${formatDuration(MAX_DURATION_MS)}`
               : phase === 'paused'
-                ? 'Tap mic to resume, square to finish'
+                ? 'Tap mic to resume, Done to edit & post'
                 : `Min 15s / Max 5min`
             }
           </Text>
@@ -569,11 +576,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.12)',
   },
-  stopIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 3,
-    backgroundColor: Colors.text,
+  doneBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255, 215, 0, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  doneBtnText: {
+    color: Colors.accent,
+    fontSize: 9,
+    fontFamily: 'DMSans_700Bold',
+    marginTop: -2,
   },
   durationHint: {
     color: Colors.textMuted,
