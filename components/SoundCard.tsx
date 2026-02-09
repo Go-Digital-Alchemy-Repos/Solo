@@ -107,9 +107,10 @@ export default function SoundCard({ post }: SoundCardProps) {
       const baseUrl = getApiUrl();
       const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
       const headers: Record<string, string> = {};
-      if (Platform.OS !== 'web') {
-        const sessionCookie = await AsyncStorage.getItem('solo_auth_session');
-        if (sessionCookie) {
+      const sessionCookie = await AsyncStorage.getItem('solo_auth_session');
+      if (sessionCookie) {
+        headers['X-Session-Token'] = sessionCookie;
+        if (Platform.OS !== 'web') {
           headers['Cookie'] = sessionCookie;
         }
       }

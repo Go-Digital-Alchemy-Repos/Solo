@@ -252,9 +252,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
 
       const headers: Record<string, string> = {};
-      if (Platform.OS !== 'web') {
-        const sessionCookie = await AsyncStorage.getItem('solo_auth_session');
-        if (sessionCookie) {
+      const sessionCookie = await AsyncStorage.getItem('solo_auth_session');
+      if (sessionCookie) {
+        headers['X-Session-Token'] = sessionCookie;
+        if (Platform.OS !== 'web') {
           headers['Cookie'] = sessionCookie;
         }
       }
