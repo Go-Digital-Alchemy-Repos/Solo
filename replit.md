@@ -68,7 +68,8 @@ Preferred communication style: Simple, everyday language.
 - **File Uploads**: `multer` for avatar and audio file uploads, stored in `uploads/avatars/` and `uploads/solos/`
 - **CORS**: Dynamic CORS configuration supporting Replit dev/deployment domains and localhost origins
 - **Static Serving**: In production, serves the Expo web build from a `dist/` directory. In development, proxies to the Expo Metro bundler
-- **Admin Portal**: Web-based admin panel served at `/admin` (HTML in `server/templates/admin.html`). Routes defined in `server/features/admin/admin.routes.ts`. Features: Reports dashboard (stats, trends, top contributors), App Users management (search, paginate, edit, delete), App Docs management (filesystem-based docs scanning with coverage tracking). Uses same session-based auth with `is_admin` flag on users table
+- **Admin Portal**: Web-based admin panel served at `/admin` (HTML in `server/templates/admin.html`). Routes defined in `server/features/admin/admin.routes.ts`. Features: Reports dashboard (stats, trends, top contributors), App Users management (search, paginate, edit, delete), App Docs management (filesystem-based docs scanning with coverage tracking), System Integrations management (MailGun email, Cloudflare R2 storage, Twilio SMS — config forms, connection testing, enable/disable toggles). Uses same session-based auth with `is_admin` flag on users table
+  - System Integrations: Configs stored in `system_integrations` table with masked secrets. Service in `server/features/admin/integrations.service.ts`. API: `GET /api/admin/integrations`, `PUT /api/admin/integrations`, `POST /api/admin/integrations/:service/test`
 
 ### Database Schema (Drizzle ORM)
 - **ORM**: Drizzle ORM with PostgreSQL dialect
@@ -80,6 +81,7 @@ Preferred communication style: Simple, everyday language.
   - `ba_verification` table: BetterAuth verification tokens - `id`, `identifier`, `value`, `expires_at`
   - `solos` table: `id` (UUID), `user_id`, `username`, `audio_url`, `timestamp`, `tags` (text array), `avatar_url`, `title`, `duration_ms`, `display_name`, `transcript` (JSONB, nullable)
   - `app_docs` table: `id` (serial), `title`, `content`, `category`, `sort_order` (integer, default 0), `created_at`, `updated_at`
+  - `system_integrations` table: `id` (serial), `service_name` (varchar, unique), `config` (JSONB), `enabled` (boolean), `last_test_result` (text, nullable), `created_at`, `updated_at`
   - `session` table: managed by connect-pg-simple (not in Drizzle schema)
 - **Validation**: `drizzle-zod` generates Zod schemas from the Drizzle table definitions
 - **Migrations**: Managed via `drizzle-kit push` (use `--force` to avoid session table conflicts)
