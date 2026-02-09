@@ -119,6 +119,54 @@ export const systemIntegrations = pgTable("system_integrations", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const eventLevel = ['info', 'warn', 'error'] as const;
+export type EventLevel = typeof eventLevel[number];
+
+export const systemEvents = pgTable("system_events", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  level: text("level").notNull().default('info'),
+  source: text("source").notNull(),
+  eventType: text("event_type").notNull(),
+  message: text("message").notNull(),
+  details: jsonb("details"),
+  requestId: text("request_id"),
+  userId: text("user_id"),
+  soloId: text("solo_id"),
+  resolvedAt: timestamp("resolved_at"),
+  resolvedByUserId: text("resolved_by_user_id"),
+  resolutionNote: text("resolution_note"),
+}, (table) => [
+  index("system_events_created_idx").on(table.createdAt),
+  index("system_events_level_idx").on(table.level),
+  index("system_events_source_idx").on(table.source),
+  index("system_events_resolved_idx").on(table.resolvedAt),
+]);
+
+export const requestLogs = pgTable("request_logs", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  requestId: text("request_id").notNull(),
+  method: text("method").notNull(),
+  path: text("path").notNull(),
+  status: integer("status").notNull(),
+  durationMs: integer("duration_ms"),
+  userId: text("user_id"),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+}, (table) => [
+  index("request_logs_created_idx").on(table.createdAt),
+  index("request_logs_status_idx").on(table.status),
+  index("request_logs_path_idx").on(table.path),
+]);
+
+export type SystemEvent = typeof systemEvents.$inferSelect;
+export type RequestLog = typeof requestLogs.$inferSelect;
+
 export const conversations = pgTable("conversations", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
