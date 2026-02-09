@@ -56,6 +56,15 @@ export interface AudioPost {
   tags: string[];
 }
 
+export interface SoloStatusResponse {
+  id: string;
+  status: 'queued' | 'processing' | 'ready' | 'failed';
+  processingStep: 'upload' | 'trim' | 'mix' | 'transcribe' | 'done';
+  processingError: string | null;
+  attempts: number;
+  readyAt: string | null;
+}
+
 interface DataContextValue {
   currentUser: UserProfile;
   updateProfile: (updates: Partial<UserProfile>) => void;
@@ -69,7 +78,9 @@ interface DataContextValue {
     trimStartMs?: number;
     trimEndMs?: number;
     vibeId?: string;
-  }) => Promise<void>;
+  }) => Promise<string>;
+  pollSoloStatus: (soloId: string) => Promise<SoloStatusResponse>;
+  retrySolo: (soloId: string) => Promise<string>;
   toggleLike: (postId: string) => void;
   addComment: (postId: string, text: string) => void;
   following: Set<string>;
@@ -217,7 +228,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     trimStartMs?: number;
     trimEndMs?: number;
     vibeId?: string;
-  }) => {
+  }): Promise<string> => {
     setIsUploading(true);
     try {
       const baseUrl = getApiUrl();
@@ -278,11 +289,54 @@ export function DataProvider({ children }: { children: ReactNode }) {
         throw new Error(`Upload failed: ${errorText}`);
       }
 
-      queryClient.invalidateQueries({ queryKey: ['/api/solos'] });
+      const data = await res.json();
+      return data.id as string;
     } finally {
       setIsUploading(false);
     }
-  }, [queryClient]);
+  }, []);
+
+  const pollSoloStatus = useCallback(async (soloId: string): Promise<SoloStatusResponse> => {
+    const baseUrl = getApiUrl();
+    const headers: Record<string, string> = {};
+    const sessionCookie = await AsyncStorage.getItem('solo_auth_session');
+    if (sessionCookie) {
+      headers['X-Session-Token'] = sessionCookie;
+      if (Platform.OS !== 'web') {
+        headers['Cookie'] = sessionCookie;
+      }
+    }
+
+    const url = new URL(`/api/solos/${soloId}/status`, baseUrl).toString();
+    const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
+    const res = await fetchFn(url, { headers, credentials: 'include' } as any);
+    if (!res.ok) {
+      throw new Error(`Status check failed: ${res.status}`);
+    }
+    return await res.json() as SoloStatusResponse;
+  }, []);
+
+  const retrySoloFn = useCallback(async (soloId: string): Promise<string> => {
+    const baseUrl = getApiUrl();
+    const headers: Record<string, string> = {};
+    const sessionCookie = await AsyncStorage.getItem('solo_auth_session');
+    if (sessionCookie) {
+      headers['X-Session-Token'] = sessionCookie;
+      if (Platform.OS !== 'web') {
+        headers['Cookie'] = sessionCookie;
+      }
+    }
+
+    const url = new URL(`/api/solos/${soloId}/retry`, baseUrl).toString();
+    const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
+    const res = await fetchFn(url, { method: 'POST', headers, credentials: 'include' } as any);
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Retry failed: ${errorText}`);
+    }
+    const data = await res.json();
+    return data.id as string;
+  }, []);
 
   const toggleLike = useCallback((postId: string) => {
     setLocalLikes(prev => {
@@ -346,6 +400,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     posts,
     addPost,
     uploadAndPost,
+    pollSoloStatus,
+    retrySolo: retrySoloFn,
     toggleLike,
     addComment,
     following,
@@ -357,7 +413,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     refreshFeed,
     feedTag,
     setFeedTag,
-  }), [currentUser, updateProfile, posts, addPost, uploadAndPost, toggleLike, addComment, following, toggleFollow, searchPosts, searchUsers, isUploading, refreshFeed, feedTag]);
+  }), [currentUser, updateProfile, posts, addPost, uploadAndPost, pollSoloStatus, retrySoloFn, toggleLike, addComment, following, toggleFollow, searchPosts, searchUsers, isUploading, refreshFeed, feedTag]);
 
   return (
     <DataContext.Provider value={value}>

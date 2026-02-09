@@ -59,7 +59,25 @@ function LiveBar({ index, isRecording }: { index: number; isRecording: boolean }
   );
 }
 
-function ProcessingScreen() {
+const STEP_LABELS: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap }> = {
+  upload: { label: 'Uploading audio', icon: 'cloud-upload' },
+  trim: { label: 'Trimming audio', icon: 'cut' },
+  mix: { label: 'Mixing vibes', icon: 'musical-notes' },
+  transcribe: { label: 'Transcribing words', icon: 'text' },
+  done: { label: 'Finishing up', icon: 'checkmark-circle' },
+};
+
+const STEP_ORDER = ['upload', 'trim', 'mix', 'transcribe', 'done'];
+
+function ProcessingScreen({ soloId, onComplete, onFailed }: {
+  soloId: string;
+  onComplete: () => void;
+  onFailed: (error: string) => void;
+}) {
+  const { pollSoloStatus } = useData();
+  const [currentStep, setCurrentStep] = useState('upload');
+  const [status, setStatus] = useState<'queued' | 'processing' | 'ready' | 'failed'>('queued');
+
   const scale = useSharedValue(1);
   const opacity = useSharedValue(0.4);
 
@@ -80,29 +98,88 @@ function ProcessingScreen() {
     );
   }, []);
 
+  useEffect(() => {
+    if (!soloId) return;
+    let cancelled = false;
+
+    const poll = async () => {
+      while (!cancelled) {
+        try {
+          const result = await pollSoloStatus(soloId);
+          if (cancelled) return;
+          setStatus(result.status);
+          setCurrentStep(result.processingStep);
+
+          if (result.status === 'ready') {
+            onComplete();
+            return;
+          }
+          if (result.status === 'failed') {
+            onFailed(result.processingError || 'Processing failed');
+            return;
+          }
+        } catch (err) {
+          console.error('Poll error:', err);
+        }
+        await new Promise(r => setTimeout(r, 1500));
+      }
+    };
+
+    poll();
+    return () => { cancelled = true; };
+  }, [soloId]);
+
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
     opacity: opacity.value,
   }));
+
+  const currentStepIndex = STEP_ORDER.indexOf(currentStep);
+  const stepInfo = STEP_LABELS[currentStep] || STEP_LABELS.upload;
 
   return (
     <View style={styles.processingContainer}>
       <View style={styles.processingCircleWrap}>
         <Animated.View style={[styles.processingPulse, pulseStyle]} />
         <View style={styles.processingCircle}>
-          <Ionicons name="cloud-upload" size={36} color={Colors.bg} />
+          <Ionicons name={stepInfo.icon} size={36} color={Colors.bg} />
         </View>
       </View>
       <Text style={styles.processingTitle}>Processing your Solo</Text>
-      <Text style={styles.processingSubtitle}>Trimming, mixing & transcribing...</Text>
+      <Text style={styles.processingSubtitle}>{stepInfo.label}...</Text>
+      <View style={styles.stepsContainer}>
+        {STEP_ORDER.map((step, i) => {
+          const info = STEP_LABELS[step];
+          const isActive = step === currentStep;
+          const isCompleted = i < currentStepIndex;
+          return (
+            <View key={step} style={styles.stepRow}>
+              <View style={[
+                styles.stepDot,
+                isCompleted && styles.stepDotCompleted,
+                isActive && styles.stepDotActive,
+              ]}>
+                {isCompleted && <Ionicons name="checkmark" size={10} color={Colors.bg} />}
+              </View>
+              <Text style={[
+                styles.stepLabel,
+                isCompleted && styles.stepLabelCompleted,
+                isActive && styles.stepLabelActive,
+              ]}>{info.label}</Text>
+            </View>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
+type FailedPhase = { phase: 'failed'; soloId: string; error: string };
+
 export default function RecordScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { uploadAndPost } = useData();
+  const { uploadAndPost, retrySolo, refreshFeed } = useData();
   const [phase, setPhase] = useState<RecordPhase>('idle');
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
@@ -110,6 +187,8 @@ export default function RecordScreen() {
   const [segmentCount, setSegmentCount] = useState(1);
   const [segmentMarkers, setSegmentMarkers] = useState<number[]>([]);
   const [isPosting, setIsPosting] = useState(false);
+  const [processingSoloId, setProcessingSoloId] = useState<string | null>(null);
+  const [failedInfo, setFailedInfo] = useState<{ soloId: string; error: string } | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -156,6 +235,8 @@ export default function RecordScreen() {
     setSegmentCount(1);
     setSegmentMarkers([]);
     setIsPosting(false);
+    setProcessingSoloId(null);
+    setFailedInfo(null);
   }, []);
 
   const startRecording = useCallback(async () => {
@@ -279,9 +360,10 @@ export default function RecordScreen() {
 
     setIsPosting(true);
     setPhase('processing');
+    setFailedInfo(null);
 
     try {
-      await uploadAndPost({
+      const soloId = await uploadAndPost({
         audioUri: recordedUri,
         title,
         durationMs: effectiveDuration,
@@ -290,18 +372,42 @@ export default function RecordScreen() {
         vibeId: vibeId || undefined,
         tags: tags.length > 0 ? tags : undefined,
       });
-      if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-      resetAll();
-      router.replace('/(tabs)/');
+      setProcessingSoloId(soloId);
     } catch (e: any) {
       console.error('Failed to upload:', e?.message || e, e?.stack);
       setIsPosting(false);
       setPhase('editing');
       Alert.alert('Upload Failed', 'Could not upload your recording. Please try again.');
     }
-  }, [recordedUri, uploadAndPost, resetAll]);
+  }, [recordedUri, uploadAndPost]);
+
+  const handleProcessingComplete = useCallback(() => {
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    refreshFeed();
+    resetAll();
+    router.replace('/(tabs)/');
+  }, [resetAll, refreshFeed]);
+
+  const handleProcessingFailed = useCallback((error: string) => {
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+    setFailedInfo({ soloId: processingSoloId || '', error });
+  }, [processingSoloId]);
+
+  const handleRetry = useCallback(async () => {
+    if (!failedInfo?.soloId) return;
+    try {
+      setFailedInfo(null);
+      await retrySolo(failedInfo.soloId);
+      setProcessingSoloId(failedInfo.soloId);
+    } catch (e: any) {
+      Alert.alert('Retry Failed', e?.message || 'Could not retry processing.');
+      setFailedInfo({ soloId: failedInfo.soloId, error: e?.message || 'Retry failed' });
+    }
+  }, [failedInfo, retrySolo]);
 
   const handleEditCancel = useCallback(() => {
     resetAll();
@@ -335,11 +441,41 @@ export default function RecordScreen() {
     );
   }
 
-  if (phase === 'processing') {
+  if (phase === 'processing' && failedInfo) {
     return (
       <View style={styles.container}>
         <SoloHeader />
-        <ProcessingScreen />
+        <View style={styles.processingContainer}>
+          <View style={styles.processingCircleWrap}>
+            <View style={[styles.processingCircle, { backgroundColor: Colors.danger }]}>
+              <Ionicons name="alert-circle" size={36} color="#fff" />
+            </View>
+          </View>
+          <Text style={styles.processingTitle}>Processing Failed</Text>
+          <Text style={styles.processingSubtitle}>{failedInfo.error}</Text>
+          <View style={styles.failedActions}>
+            <Pressable onPress={handleRetry} style={styles.retryBtn}>
+              <Ionicons name="refresh" size={20} color={Colors.bg} />
+              <Text style={styles.retryBtnText}>Retry</Text>
+            </Pressable>
+            <Pressable onPress={resetAll} style={styles.discardBtn}>
+              <Text style={styles.discardBtnText}>Discard</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  if (phase === 'processing' && processingSoloId) {
+    return (
+      <View style={styles.container}>
+        <SoloHeader />
+        <ProcessingScreen
+          soloId={processingSoloId}
+          onComplete={handleProcessingComplete}
+          onFailed={handleProcessingFailed}
+        />
       </View>
     );
   }
@@ -631,5 +767,75 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'DMSans_400Regular',
     textAlign: 'center',
+  },
+  stepsContainer: {
+    marginTop: 24,
+    gap: 12,
+    alignSelf: 'stretch',
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  stepDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  stepDotCompleted: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
+  },
+  stepDotActive: {
+    borderColor: Colors.accent,
+    borderWidth: 2,
+  },
+  stepLabel: {
+    color: 'rgba(255, 255, 255, 0.3)',
+    fontSize: 13,
+    fontFamily: 'DMSans_500Medium',
+  },
+  stepLabelCompleted: {
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  stepLabelActive: {
+    color: Colors.accent,
+  },
+  failedActions: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 12,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.accent,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  retryBtnText: {
+    color: Colors.bg,
+    fontSize: 15,
+    fontFamily: 'DMSans_700Bold',
+  },
+  discardBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  discardBtnText: {
+    color: Colors.textDim,
+    fontSize: 15,
+    fontFamily: 'DMSans_500Medium',
   },
 });
