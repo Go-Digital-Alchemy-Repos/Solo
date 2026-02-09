@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { db } from "./db";
 import { users, solos, appDocs } from "@shared/schema";
-import { eq, desc, sql, count, and } from "drizzle-orm";
+import { eq, desc, sql, count, and, inArray } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
 async function requireAdmin(req: Request, res: Response): Promise<string | null> {
@@ -212,15 +212,18 @@ export function registerAdminRoutes(app: Express) {
 
       const [total] = await countQuery;
 
-      const userIds = allUsers.map((u: any) => u.id);
-      const soloCounts = await db
-        .select({
-          userId: solos.userId,
-          count: count(),
-        })
-        .from(solos)
-        .where(sql`${solos.userId} = ANY(${userIds})`)
-        .groupBy(solos.userId);
+      const userIds: string[] = allUsers.map((u: any) => u.id);
+      let soloCounts: { userId: string; count: number }[] = [];
+      if (userIds.length > 0) {
+        soloCounts = await db
+          .select({
+            userId: solos.userId,
+            count: count(),
+          })
+          .from(solos)
+          .where(inArray(solos.userId, userIds))
+          .groupBy(solos.userId);
+      }
 
       const soloCountMap: Record<string, number> = {};
       soloCounts.forEach((s: any) => {

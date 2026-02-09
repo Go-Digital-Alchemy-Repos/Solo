@@ -15,6 +15,7 @@ import { spawn } from "child_process";
 import { tmpdir } from "os";
 import { writeFile, unlink, readFile } from "fs/promises";
 import cookieSignature from "cookie-signature";
+import { registerAdminRoutes } from "./admin-routes";
 
 declare module "express-session" {
   interface SessionData {
@@ -637,6 +638,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ error: "Failed to transcribe audio" });
     }
   });
+
+  const adminTemplatePath = path.resolve(process.cwd(), "server", "templates", "admin.html");
+  app.get("/admin", (req, res) => {
+    const html = fs.readFileSync(adminTemplatePath, "utf-8");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.status(200).send(html);
+  });
+
+  registerAdminRoutes(app);
 
   const httpServer = createServer(app);
   return httpServer;
