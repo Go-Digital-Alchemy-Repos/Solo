@@ -3,7 +3,11 @@ import type { Request, Response, NextFunction } from "express";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import pg from "pg";
+import bcrypt from "bcryptjs";
 import { registerRoutes } from "./routes";
+import { db } from "./db";
+import { users } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -267,6 +271,39 @@ function setupSession(app: express.Application) {
   );
 }
 
+async function ensureAdminAccount() {
+  const adminEmail = "jamison.woodfin@gmail.com";
+  try {
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, adminEmail))
+      .limit(1);
+
+    if (!existing) {
+      const passwordHash = await bcrypt.hash("SoloAdmin2026!", 12);
+      await db.insert(users).values({
+        email: adminEmail,
+        passwordHash,
+        username: "blurryguy",
+        bio: "Admin",
+        isAdmin: true,
+      });
+      log(`Admin account created for ${adminEmail}`);
+    } else if (!existing.isAdmin) {
+      await db
+        .update(users)
+        .set({ isAdmin: true })
+        .where(eq(users.id, existing.id));
+      log(`Admin flag set for ${adminEmail}`);
+    } else {
+      log(`Admin account already exists for ${adminEmail}`);
+    }
+  } catch (e) {
+    console.error("Failed to ensure admin account:", e);
+  }
+}
+
 (async () => {
   setupCors(app);
   setupBodyParsing(app);
@@ -274,6 +311,8 @@ function setupSession(app: express.Application) {
   setupRequestLogging(app);
 
   configureExpoAndLanding(app);
+
+  await ensureAdminAccount();
 
   const server = await registerRoutes(app);
 
