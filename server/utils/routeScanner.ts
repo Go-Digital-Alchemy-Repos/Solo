@@ -19,11 +19,19 @@ export interface DomainRoutes {
 const DOMAIN_MAP: Record<string, { domain: string; displayName: string }> = {
   "routes.ts": { domain: "core", displayName: "Core API" },
   "admin-routes.ts": { domain: "admin", displayName: "Admin API" },
+  "auth.routes.ts": { domain: "auth", displayName: "Auth API" },
+  "solos.routes.ts": { domain: "solos", displayName: "Solos API" },
+  "vibes.routes.ts": { domain: "vibes", displayName: "Vibes API" },
+  "admin.routes.ts": { domain: "admin", displayName: "Admin API" },
 };
 
 const BASE_PATH_MAP: Record<string, string> = {
   "routes.ts": "/api",
   "admin-routes.ts": "/api/admin",
+  "auth.routes.ts": "/api/auth",
+  "solos.routes.ts": "/api/solos",
+  "vibes.routes.ts": "/api/vibes",
+  "admin.routes.ts": "/api/admin",
 };
 
 const ROUTE_PATTERN = /\b(?:app|router)\.(get|post|put|patch|delete)\s*\(\s*["'`](\/[^"'`]*)["'`]/gi;
@@ -71,13 +79,29 @@ export function scanAllRoutes(): Map<string, DomainRoutes> {
 
   const routeFiles = ["routes.ts", "admin-routes.ts"];
 
+  const featuresDir = path.join(serverDir, "features");
+  if (fs.existsSync(featuresDir)) {
+    const featureDirs = fs.readdirSync(featuresDir, { withFileTypes: true });
+    for (const dir of featureDirs) {
+      if (dir.isDirectory()) {
+        const featureFiles = fs.readdirSync(path.join(featuresDir, dir.name));
+        for (const f of featureFiles) {
+          if (f.endsWith(".routes.ts")) {
+            routeFiles.push(path.join("features", dir.name, f));
+          }
+        }
+      }
+    }
+  }
+
   for (const fileName of routeFiles) {
     const filePath = path.join(serverDir, fileName);
     if (!fs.existsSync(filePath)) continue;
 
-    const domainInfo = DOMAIN_MAP[fileName] || {
-      domain: fileName.replace(/\.ts$/, ""),
-      displayName: fileName.replace(/\.ts$/, ""),
+    const baseName = path.basename(fileName);
+    const domainInfo = DOMAIN_MAP[baseName] || DOMAIN_MAP[fileName] || {
+      domain: baseName.replace(/\.routes\.ts$/, "").replace(/\.ts$/, ""),
+      displayName: baseName.replace(/\.routes\.ts$/, "").replace(/\.ts$/, ""),
     };
 
     const routes = scanRouteFile(filePath, fileName);
