@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./auth";
 import { registerRoutes } from "./routes";
+import { errorHandler } from "./middleware/errorHandler";
 import { db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -225,24 +226,7 @@ function configureExpoAndLanding(app: express.Application) {
 }
 
 function setupErrorHandler(app: express.Application) {
-  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
-    const error = err as {
-      status?: number;
-      statusCode?: number;
-      message?: string;
-    };
-
-    const status = error.status || error.statusCode || 500;
-    const message = error.message || "Internal Server Error";
-
-    console.error("Internal Server Error:", err);
-
-    if (res.headersSent) {
-      return next(err);
-    }
-
-    return res.status(status).json({ message });
-  });
+  app.use(errorHandler);
 }
 
 function setupSession(app: express.Application) {
