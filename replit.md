@@ -29,9 +29,26 @@ Preferred communication style: Simple, everyday language.
 - **UI Style**: Dark theme (black `#000000` background, gold `#FFD700` accent). Constants defined in `constants/colors.ts`
 - **Platform Support**: iOS, Android, and Web. Platform-specific code handles safe areas, haptics (disabled on web), and keyboard behavior
 
-### Backend (Express.js)
+### Backend (Express.js) — Feature-Based Modular Architecture
 - **Server**: Express 5 running on Node.js (`server/index.ts`)
-- **Routes**: Registered in `server/routes.ts`, prefixed with `/api`
+- **Architecture**: Feature-based modules with layered design (routes → controllers → services)
+  - `server/features/auth/` — Authentication (signup, login, logout, profile, avatar serving)
+  - `server/features/solos/` — Audio posts (CRUD, upload, trim, mix vibes, transcribe, stream)
+  - `server/features/vibes/` — Background audio vibes (list, stream)
+  - `server/features/admin/` — Admin portal API (stats, user management, docs management)
+- **Shared Utilities**:
+  - `server/middleware/errorHandler.ts` — Centralized async error handler & wrapper
+  - `server/utils/auth-helpers.ts` — `requireAuth`, `requireAdmin`, `getSessionCookie` helpers
+  - `server/utils/paths.ts` — Centralized file path constants (UPLOADS_DIR, AVATARS_DIR, VIBES_DIR, DOCS_DIR)
+  - `server/utils/routeScanner.ts` — Auto-scans feature route files for API documentation generation
+- **Route Mounting** (in `server/routes.ts`):
+  - `/api/auth/*` → auth feature routes
+  - `/api/solos/*` → solos feature routes
+  - `/api/vibes/*` → vibes feature routes
+  - `/api/admin/*` → admin feature routes
+  - `/api/audio/:fileId` → audio streaming (from solos controller)
+  - `/api/avatars/:fileName` → avatar serving (from auth controller)
+- **API Endpoints**:
   - `POST /api/auth/signup` — Create account with email/password (bcrypt hashing, salt rounds 12)
   - `POST /api/auth/login` — Sign in with email/password
   - `POST /api/auth/logout` — Destroy session
@@ -39,14 +56,19 @@ Preferred communication style: Simple, everyday language.
   - `PUT /api/auth/profile` — Update username, bio, avatar (multipart form with multer)
   - `POST /api/solos` — Upload audio recording (requires auth). Accepts optional `trimStartMs`/`trimEndMs` form fields for server-side audio trimming via ffmpeg
   - `GET /api/solos` — List all recordings
-  - `GET /api/audio/:filename` — Stream audio file with byte-range support
+  - `DELETE /api/solos/:soloId` — Delete a solo (owner only)
+  - `PUT /api/solos/:soloId` — Update solo title/tags (owner only)
+  - `GET /api/solos/user/:userId` — Get user's solos
   - `POST /api/solos/:soloId/transcribe` — Generate word-level transcript using OpenAI gpt-4o-mini-transcribe
+  - `GET /api/audio/:fileId` — Stream audio file with byte-range support
+  - `GET /api/vibes` — List available background vibes
+  - `GET /api/vibes/:vibeId/audio` — Stream vibe audio
 - **BetterAuth Integration**: BetterAuth runs alongside existing auth at `/api/better-auth/*`. Config in `server/auth.ts`. Uses Drizzle adapter with dedicated tables (`ba_user`, `ba_session`, `ba_account`, `ba_verification`). Admin plugin provides role-based access control (roles: `user`, `admin`). Middleware in `server/middleware/auth.ts` (session validation checking both legacy and BetterAuth sessions) and `server/middleware/requireRole.ts` (role guard). BetterAuth endpoints: sign-up at `/api/better-auth/sign-up/email`, sign-in at `/api/better-auth/sign-in/email`, sign-out at `/api/better-auth/sign-out`, health at `/api/better-auth/ok`
 - **Session Management (Legacy)**: `express-session` with `connect-pg-simple` for PostgreSQL-backed sessions. 30-day session expiry, httpOnly cookies, secure in production. Still used by mobile app login flows
-- **File Uploads**: `multer` for avatar and audio file uploads, stored in `uploads/avatars/` and `uploads/audio/`
+- **File Uploads**: `multer` for avatar and audio file uploads, stored in `uploads/avatars/` and `uploads/solos/`
 - **CORS**: Dynamic CORS configuration supporting Replit dev/deployment domains and localhost origins
 - **Static Serving**: In production, serves the Expo web build from a `dist/` directory. In development, proxies to the Expo Metro bundler
-- **Admin Portal**: Web-based admin panel served at `/admin` (HTML in `server/templates/admin.html`). Routes defined in `server/admin-routes.ts` with `requireAdmin` middleware. Features: Reports dashboard (stats, trends, top contributors), App Users management (search, paginate, edit, delete), App Docs management (CRUD for documentation). Uses same session-based auth with `is_admin` flag on users table
+- **Admin Portal**: Web-based admin panel served at `/admin` (HTML in `server/templates/admin.html`). Routes defined in `server/features/admin/admin.routes.ts`. Features: Reports dashboard (stats, trends, top contributors), App Users management (search, paginate, edit, delete), App Docs management (filesystem-based docs scanning with coverage tracking). Uses same session-based auth with `is_admin` flag on users table
 
 ### Database Schema (Drizzle ORM)
 - **ORM**: Drizzle ORM with PostgreSQL dialect
