@@ -42,6 +42,52 @@ async function requireAuth(req: Request, res: Response): Promise<string | null> 
   return userId;
 }
 
+async function generateTranscript(soloId: string, audioFilePath: string, durationMs: number): Promise<Transcript | null> {
+  try {
+    const audioBuffer = fs.readFileSync(audioFilePath);
+    const { buffer: compatBuffer, format } = await ensureCompatibleFormat(Buffer.from(audioBuffer));
+
+    const file = await toFile(compatBuffer, `audio.${format}`);
+    const response = await openai.audio.transcriptions.create({
+      file,
+      model: "whisper-1",
+      response_format: "verbose_json",
+      timestamp_granularities: ["word"],
+    } as any) as any;
+
+    const text = response.text || "";
+    let words: { word: string; start: number; end: number }[] = [];
+
+    if (response.words && Array.isArray(response.words) && response.words.length > 0) {
+      words = response.words.map((w: any) => ({
+        word: w.word,
+        start: w.start,
+        end: w.end,
+      }));
+    } else {
+      const wordsFromText = text.split(/\s+/).filter(Boolean);
+      const durationSec = durationMs / 1000;
+      const wordDuration = durationSec / Math.max(wordsFromText.length, 1);
+      words = wordsFromText.map((w: string, i: number) => ({
+        word: w,
+        start: i * wordDuration,
+        end: (i + 1) * wordDuration,
+      }));
+    }
+
+    const transcript: Transcript = { text, words };
+
+    await db.update(solos)
+      .set({ transcript })
+      .where(eq(solos.id, soloId));
+
+    return transcript;
+  } catch (error) {
+    console.error("Transcript generation error for solo", soloId, error);
+    return null;
+  }
+}
+
 const AVAILABLE_VIBES = [
   { id: "coffee-shop", label: "Coffee Shop", file: "coffee-shop.mp3" },
   { id: "nature", label: "Nature", file: "nature.mp3" },
@@ -359,6 +405,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         displayName: user.username,
       }).returning();
 
+      generateTranscript(solo.id, filePath, solo.durationMs).catch(err => {
+        console.error("Background transcription failed:", err);
+      });
+
       return res.status(201).json(solo);
     } catch (error) {
       console.error("Error creating solo:", error);
@@ -478,35 +528,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Audio file not found" });
       }
 
-      const audioBuffer = fs.readFileSync(filePath);
-      const { buffer: compatBuffer, format } = await ensureCompatibleFormat(Buffer.from(audioBuffer));
-
-      const file = await toFile(compatBuffer, `audio.${format}`);
-      const response = await openai.audio.transcriptions.create({
-        file,
-        model: "gpt-4o-mini-transcribe",
-      } as any);
-
-      const text = response.text || "";
-      const wordsFromText = text.split(/\s+/).filter(Boolean);
-      const durationSec = solo.durationMs / 1000;
-      const pauseFraction = 0.15;
-      const speakingDuration = durationSec * (1 - pauseFraction);
-      const wordDuration = speakingDuration / Math.max(wordsFromText.length, 1);
-      const startOffset = durationSec * (pauseFraction / 2);
-
-      const transcript: Transcript = {
-        text,
-        words: wordsFromText.map((w, i) => ({
-          word: w,
-          start: startOffset + i * wordDuration,
-          end: startOffset + (i + 1) * wordDuration,
-        })),
-      };
-
-      await db.update(solos)
-        .set({ transcript })
-        .where(eq(solos.id, soloId));
+      const transcript = await generateTranscript(soloId, filePath, solo.durationMs);
+      if (!transcript) {
+        return res.status(500).json({ error: "Failed to transcribe audio" });
+      }
 
       return res.json({ transcript });
     } catch (error) {
