@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import * as solosService from "./solos.service";
 import { requireAuth } from "../../utils/auth-helpers";
+import { processSolo, retrySolo } from "../../processing/soloProcessor";
 import * as fs from "fs";
 
 export async function create(req: Request, res: Response) {
@@ -12,7 +13,7 @@ export async function create(req: Request, res: Response) {
     return res.status(400).json({ error: "No audio file provided" });
   }
 
-  const { title, durationMs, tags, trimStartMs, trimEndMs } = req.body;
+  const { title, durationMs, tags, trimStartMs, trimEndMs, vibeId } = req.body;
   if (!title) {
     return res.status(400).json({ error: "title is required" });
   }
@@ -22,40 +23,94 @@ export async function create(req: Request, res: Response) {
     return res.status(400).json({ error: "Complete your profile setup first" });
   }
 
-  let audioData = file.buffer;
-  const trimStart = trimStartMs ? parseFloat(trimStartMs) / 1000 : null;
-  const trimEnd = trimEndMs ? parseFloat(trimEndMs) / 1000 : null;
-  if (trimStart !== null && trimEnd !== null && trimEnd > trimStart) {
-    audioData = await solosService.trimAudio(Buffer.from(audioData), trimStart, trimEnd);
-  }
-
-  const { vibeId } = req.body;
-  if (vibeId && typeof vibeId === "string") {
-    audioData = await solosService.mixVibeIntoAudio(Buffer.from(audioData), vibeId);
-  }
-
-  const { filePath, audioUrl } = solosService.saveSoloFile(Buffer.from(audioData));
   const parsedTags = tags ? (typeof tags === 'string' ? JSON.parse(tags) : tags) : [];
+  const effectiveDurationMs = parseInt(durationMs) || 0;
 
   const solo = await solosService.createSolo({
     userId: user.id,
     username: user.username,
-    audioUrl,
+    audioUrl: '',
     tags: parsedTags,
     avatarUrl: user.avatarUrl || null,
     title,
-    durationMs: parseInt(durationMs) || 0,
+    durationMs: effectiveDurationMs,
     displayName: user.username,
+    status: 'queued',
+    processingStep: 'upload',
   });
 
-  let transcript = null;
-  try {
-    transcript = await solosService.generateTranscript(solo.id, filePath, solo.durationMs);
-  } catch (err) {
-    console.error("Transcription failed:", err);
+  res.status(201).json({ id: solo.id, status: 'queued', processingStep: 'upload' });
+
+  const trimStart = trimStartMs ? parseFloat(trimStartMs) / 1000 : null;
+  const trimEnd = trimEndMs ? parseFloat(trimEndMs) / 1000 : null;
+
+  processSolo({
+    soloId: solo.id,
+    audioBuffer: file.buffer,
+    trimStartSec: trimStart,
+    trimEndSec: trimEnd,
+    vibeId: vibeId && typeof vibeId === 'string' ? vibeId : null,
+    durationMs: effectiveDurationMs,
+  }).catch((err) => {
+    console.error(`[Controller] Background processing error for solo ${solo.id}:`, err);
+  });
+}
+
+export async function getStatus(req: Request, res: Response) {
+  const { soloId } = req.params;
+  const solo = await solosService.getSoloById(soloId);
+  if (!solo) {
+    return res.status(404).json({ error: "Solo not found" });
   }
 
-  return res.status(201).json({ ...solo, transcript });
+  return res.json({
+    id: solo.id,
+    status: solo.status,
+    processingStep: solo.processingStep,
+    processingError: solo.processingError,
+    attempts: solo.attempts,
+    readyAt: solo.readyAt,
+  });
+}
+
+export async function retry(req: Request, res: Response) {
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
+
+  const { soloId } = req.params;
+  const solo = await solosService.getSoloById(soloId);
+  if (!solo) {
+    return res.status(404).json({ error: "Solo not found" });
+  }
+  if (solo.userId !== userId) {
+    return res.status(403).json({ error: "You can only retry your own solos" });
+  }
+  if (solo.status !== 'failed') {
+    return res.status(400).json({ error: "Solo is not in a failed state" });
+  }
+
+  const requeued = await retrySolo(soloId);
+  if (!requeued) {
+    return res.status(400).json({ error: "Could not re-queue solo" });
+  }
+
+  res.json({ id: soloId, status: 'queued', processingStep: 'upload' });
+
+  const fileId = solo.audioUrl?.replace('/api/audio/', '');
+  const filePath = fileId ? solosService.getAudioFilePath(fileId) : null;
+  if (filePath) {
+    const audioBuffer = fs.readFileSync(filePath);
+    processSolo({
+      soloId,
+      audioBuffer: Buffer.from(audioBuffer),
+      trimStartSec: null,
+      trimEndSec: null,
+      vibeId: null,
+      durationMs: solo.durationMs,
+    }).catch((err) => {
+      console.error(`[Controller] Retry processing error for solo ${soloId}:`, err);
+    });
+  }
 }
 
 export async function list(req: Request, res: Response) {

@@ -8,6 +8,8 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 
 
 router.post("/", upload.single("audio"), asyncHandler(solosController.create));
 router.get("/", asyncHandler(solosController.list));
+router.get("/:soloId/status", asyncHandler(solosController.getStatus));
+router.post("/:soloId/retry", asyncHandler(solosController.retry));
 router.delete("/:soloId", asyncHandler(solosController.remove));
 router.put("/:soloId", asyncHandler(solosController.update));
 router.get("/user/:userId", asyncHandler(solosController.userSolos));

@@ -1,7 +1,7 @@
 import { db } from "../../db";
 import { solos, users } from "@shared/schema";
 import type { Transcript } from "@shared/schema";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
@@ -34,16 +34,24 @@ export async function createSolo(data: {
   title: string;
   durationMs: number;
   displayName: string;
+  status?: string;
+  processingStep?: string;
 }) {
   const [solo] = await db.insert(solos).values(data).returning();
   return solo;
 }
 
 export async function listSolos(tag?: string) {
-  const baseQuery = db.select().from(solos);
-  return tag
-    ? await baseQuery.where(sql`${tag} = ANY(${solos.tags})`).orderBy(desc(solos.timestamp)).limit(50)
-    : await baseQuery.orderBy(desc(solos.timestamp)).limit(50);
+  if (tag) {
+    return db.select().from(solos)
+      .where(and(eq(solos.status, 'ready'), sql`${tag} = ANY(${solos.tags})`))
+      .orderBy(desc(solos.timestamp))
+      .limit(50);
+  }
+  return db.select().from(solos)
+    .where(eq(solos.status, 'ready'))
+    .orderBy(desc(solos.timestamp))
+    .limit(50);
 }
 
 export async function getSoloById(soloId: string) {
