@@ -20,8 +20,9 @@ Preferred communication style: Simple, everyday language.
 - **Creator Suite** (Record tab): Multi-segment recording (pause/resume), optional Teleprompter overlay with auto-scroll, Background Vibes selector (Coffee Shop/Nature/Lofi Beat at 10% volume mixed server-side via ffmpeg), WaveformTrimmer with transcript preview bubble, Redo button. Components: `Teleprompter.tsx`, `VibeSelector.tsx`
   - Teleprompter speed calibrated to 160 WPM baseline (1.0x) with multiplier chips: 0.5x, 1.0x, 1.2x, 1.5x, 2.0x
   - Edit screen has Cancel/Post header, inline title input, scrubbing (tap/drag waveform to seek), clearly visible Preview/Play button, and direct posting flow
-  - Post triggers a processing screen with pulsing gold animation while audio is trimmed server-side via ffmpeg, mixed with vibes, uploaded, and transcribed
-  - After successful post, app navigates to Feed tab so user sees their new Solo immediately
+  - Post triggers async processing pipeline: upload returns solo ID immediately, client polls `GET /api/solos/:id/status` every 1.5s showing step-by-step progress (uploading → trimming → mixing → transcribing → done). Processing happens in `server/processing/soloProcessor.ts` with state machine (queued → processing → ready/failed)
+  - Failed processing shows retry button (`POST /api/solos/:id/retry`) and discard option. Max 3 attempts tracked in `attempts` column
+  - After successful processing, app navigates to Feed tab so user sees their new Solo immediately
   - Server-side trimming uses ffmpeg with -ss (start) and -t (duration) flags based on trimStartMs/trimEndMs from the client
   - Audio mixing: voice at 100% volume, vibe background at 10% volume with amix weights ensuring voice clarity
 - **Animations**: `react-native-reanimated` powers waveform bar animations, like button effects, and recording visualizations
@@ -54,8 +55,10 @@ Preferred communication style: Simple, everyday language.
   - `POST /api/auth/logout` — Destroy session
   - `GET /api/auth/me` — Get current authenticated user
   - `PUT /api/auth/profile` — Update username, bio, avatar (multipart form with multer)
-  - `POST /api/solos` — Upload audio recording (requires auth). Accepts optional `trimStartMs`/`trimEndMs` form fields for server-side audio trimming via ffmpeg
-  - `GET /api/solos` — List all recordings
+  - `POST /api/solos` — Upload audio recording (requires auth). Returns solo ID immediately, triggers async processing (trim → mix → transcribe). Accepts optional `trimStartMs`/`trimEndMs` form fields
+  - `GET /api/solos` — List all recordings (only status='ready' shown in feed)
+  - `GET /api/solos/:soloId/status` — Poll processing status (status, processingStep, processingError, attempts)
+  - `POST /api/solos/:soloId/retry` — Retry failed processing (max 3 attempts)
   - `DELETE /api/solos/:soloId` — Delete a solo (owner only)
   - `PUT /api/solos/:soloId` — Update solo title/tags (owner only)
   - `GET /api/solos/user/:userId` — Get user's solos
@@ -79,7 +82,7 @@ Preferred communication style: Simple, everyday language.
   - `ba_session` table: BetterAuth session store - `id`, `expires_at`, `token`, `ip_address`, `user_agent`, `user_id` (FK to ba_user)
   - `ba_account` table: BetterAuth account/credentials store - `id`, `account_id`, `provider_id`, `user_id` (FK to ba_user), `password`, etc.
   - `ba_verification` table: BetterAuth verification tokens - `id`, `identifier`, `value`, `expires_at`
-  - `solos` table: `id` (UUID), `user_id`, `username`, `audio_url`, `timestamp`, `tags` (text array), `avatar_url`, `title`, `duration_ms`, `display_name`, `transcript` (JSONB, nullable)
+  - `solos` table: `id` (UUID), `user_id`, `username`, `audio_url`, `timestamp`, `tags` (text array), `avatar_url`, `title`, `duration_ms`, `display_name`, `transcript` (JSONB, nullable), `status` (text: queued/processing/ready/failed, default 'ready'), `processing_step` (text, nullable), `processing_error` (text, nullable), `attempts` (integer, default 0), `ready_at` (timestamp, nullable)
   - `app_docs` table: `id` (serial), `title`, `content`, `category`, `sort_order` (integer, default 0), `created_at`, `updated_at`
   - `system_integrations` table: `id` (serial), `service_name` (varchar, unique), `config` (JSONB), `enabled` (boolean), `last_test_result` (text, nullable), `created_at`, `updated_at`
   - `session` table: managed by connect-pg-simple (not in Drizzle schema)
