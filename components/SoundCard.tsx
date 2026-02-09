@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput, FlatList, Platform, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, Pressable, TextInput, FlatList, Platform, ActivityIndicator, PanResponder, LayoutChangeEvent } from 'react-native';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -34,7 +34,7 @@ function formatTimeAgo(timestamp: number): string {
 }
 
 export default function SoundCard({ post }: SoundCardProps) {
-  const { state, play, pause, resume } = usePlayback();
+  const { state, play, pause, resume, seekTo } = usePlayback();
   const { toggleLike, addComment, following, toggleFollow } = useData();
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -42,12 +42,58 @@ export default function SoundCard({ post }: SoundCardProps) {
   const [showLyrics, setShowLyrics] = useState(false);
   const [transcript, setTranscript] = useState<Transcript | null>(post.transcript);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubPosition, setScrubPosition] = useState(0);
+  const scrubberWidth = useRef(0);
+  const scrubRef = useRef({ scrubPosition: 0, durationMillis: 0, isLoaded: false });
 
   const isThisPlaying = state.currentPostId === post.id && state.isPlaying;
   const isThisLoaded = state.currentPostId === post.id;
   const progress = isThisLoaded && state.durationMillis > 0
     ? state.positionMillis / state.durationMillis
     : 0;
+
+  scrubRef.current.scrubPosition = scrubPosition;
+  scrubRef.current.durationMillis = state.durationMillis;
+  scrubRef.current.isLoaded = isThisLoaded;
+
+  const displayProgress = isScrubbing ? scrubPosition : progress;
+  const displayPositionMs = isScrubbing
+    ? scrubPosition * (isThisLoaded ? state.durationMillis : post.durationMs)
+    : (isThisLoaded ? state.positionMillis : 0);
+
+  const scrubberPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        if (!scrubRef.current.isLoaded) return;
+        setIsScrubbing(true);
+        const x = evt.nativeEvent.locationX;
+        const ratio = Math.max(0, Math.min(1, x / Math.max(scrubberWidth.current, 1)));
+        setScrubPosition(ratio);
+      },
+      onPanResponderMove: (evt) => {
+        if (!scrubRef.current.isLoaded) return;
+        const x = evt.nativeEvent.locationX;
+        const ratio = Math.max(0, Math.min(1, x / Math.max(scrubberWidth.current, 1)));
+        setScrubPosition(ratio);
+      },
+      onPanResponderRelease: () => {
+        if (!scrubRef.current.isLoaded) return;
+        const seekMs = scrubRef.current.scrubPosition * scrubRef.current.durationMillis;
+        seekTo(seekMs);
+        setIsScrubbing(false);
+      },
+      onPanResponderTerminate: () => {
+        setIsScrubbing(false);
+      },
+    })
+  ).current;
+
+  const onScrubberLayout = useCallback((e: LayoutChangeEvent) => {
+    scrubberWidth.current = e.nativeEvent.layout.width;
+  }, []);
 
   const likeScale = useSharedValue(1);
   const likeAnimStyle = useAnimatedStyle(() => ({
@@ -171,7 +217,7 @@ export default function SoundCard({ post }: SoundCardProps) {
         {showLyrics && transcript ? (
           <LyricView
             words={transcript.words}
-            positionMs={isThisLoaded ? state.positionMillis : 0}
+            positionMs={displayPositionMs}
             isActive={isThisLoaded}
             height={80}
           />
@@ -179,11 +225,21 @@ export default function SoundCard({ post }: SoundCardProps) {
           <WaveformBars
             data={post.waveformData}
             isPlaying={isThisPlaying}
-            progress={progress}
+            progress={displayProgress}
             height={64}
             barWidth={3}
           />
         )}
+      </View>
+
+      <View
+        style={styles.scrubberTrack}
+        onLayout={onScrubberLayout}
+        {...scrubberPanResponder.panHandlers}
+      >
+        <View style={styles.scrubberBg} />
+        <View style={[styles.scrubberFill, { width: `${displayProgress * 100}%` as any }]} />
+        <View style={[styles.scrubberThumb, { left: `${displayProgress * 100}%` as any }]} />
       </View>
 
       <View style={styles.controls}>
@@ -196,7 +252,7 @@ export default function SoundCard({ post }: SoundCardProps) {
         </Pressable>
         <View style={styles.timeInfo}>
           <Text style={styles.timeText}>
-            {isThisLoaded ? formatTime(state.positionMillis) : '0:00'}
+            {formatTime(displayPositionMs)}
           </Text>
           <Text style={styles.timeSeparator}>/</Text>
           <Text style={styles.timeText}>
@@ -366,10 +422,40 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   waveformContainer: {
-    marginBottom: 12,
+    marginBottom: 8,
     marginHorizontal: -16,
     paddingHorizontal: 0,
     overflow: 'hidden',
+  },
+  scrubberTrack: {
+    height: 24,
+    justifyContent: 'center',
+    marginBottom: 8,
+    position: 'relative',
+  },
+  scrubberBg: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  scrubberFill: {
+    position: 'absolute',
+    left: 0,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: Colors.accent,
+  },
+  scrubberThumb: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: Colors.accent,
+    marginLeft: -7,
+    top: 5,
   },
   controls: {
     flexDirection: 'row',

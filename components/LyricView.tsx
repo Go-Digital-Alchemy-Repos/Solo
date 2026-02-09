@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   line: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 4,
+    paddingHorizontal: 16,
     minHeight: 32,
     alignItems: 'center',
     marginBottom: 4,
