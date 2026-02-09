@@ -39,6 +39,12 @@ export async function requireAuth(req: Request, res: Response): Promise<string |
   if (!userId) {
     throw AppError.unauthorized();
   }
+
+  const [user] = await db.select({ isDisabled: users.isDisabled }).from(users).where(eq(users.id, userId)).limit(1);
+  if (user?.isDisabled) {
+    throw AppError.forbidden("Account is disabled. Contact support for assistance.");
+  }
+
   return userId;
 }
 
