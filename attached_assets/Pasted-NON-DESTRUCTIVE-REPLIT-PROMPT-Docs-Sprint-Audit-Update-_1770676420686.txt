@@ -1,0 +1,171 @@
+NON-DESTRUCTIVE REPLIT PROMPT — Docs Sprint: Audit + Update “App Docs Library” for All New Features
+
+You are working in an existing monorepo (Expo/React Native + Express + Postgres/Drizzle). DO NOT remove or rewrite working features. This task is DOCUMENTATION-ONLY plus small, safe instrumentation if absolutely required to document accurately. No breaking changes.
+
+GOAL
+Review the entire codebase and ALL existing documentation, then update the in-app “App Docs Library” (and any repo docs if applicable) to reflect every feature, endpoint, configuration, and workflow that has been added or changed since the last documentation sprint.
+
+PRIMARY OUTPUT
+A refreshed “App Docs Library” with:
+- Updated existing docs pages (amendments)
+- New docs pages for new features
+- A “Changelog / What’s New” entry summarizing new additions since the last sprint
+- Cross-links between related docs pages
+- A “Docs Coverage Checklist” to prevent gaps
+
+NON-DESTRUCTIVE REQUIREMENTS
+- Do not delete docs; if something is outdated, mark it as “Deprecated” and link to the replacement.
+- Preserve existing docs structure and tone unless it’s clearly inconsistent.
+- Maintain UI consistency in the Docs Library (dark theme, gold accents, DM Sans).
+- Ensure all docs are accurate to the current code (do not guess).
+
+STEP-BY-STEP PLAN
+
+1) Identify the Docs Library storage and editing flow
+- Locate how “App Docs Library” content is stored:
+  - DB tables (e.g., docs_pages, docs_sections) OR
+  - Markdown files rendered in-app OR
+  - Seeded JSON/content files
+- Identify admin UI paths for creating/editing docs pages.
+- Confirm there is an existing “Docs Library” navigation entry in the Admin.
+
+2) Create a Documentation Inventory (internal, not user-facing)
+Build a comprehensive inventory by scanning:
+- Frontend routes/screens (app/…)
+- Components and providers (components/, lib/)
+- Backend routes (server/routes.ts and any route modules)
+- Shared schema (shared/schema.ts)
+- Upload/processing/transcription/audio streaming modules
+- Auth/session handling, CORS, cookies, storage patterns
+- Any environment variables, feature flags, scripts, and deployment notes in:
+  - package.json scripts
+  - server/index.ts
+  - replit.md
+  - README, docs/, etc.
+
+Output an internal checklist grouping findings into:
+- User-facing features
+- Admin features
+- Backend subsystems
+- Database schema changes
+- Integrations (OpenAI, ffmpeg, storage)
+- Operational/DevOps notes
+
+3) Compare against existing docs to find gaps
+- For each inventory item:
+  - If documented: verify accuracy, update screenshots/flows/text as needed
+  - If missing: create a new docs page or add a section to the correct page
+- Specifically verify docs coverage for:
+  - Auth flows (signup/login/logout, session cookie handling)
+  - Audio pipeline (recording, trimming, vibe mixing, upload, streaming range support)
+  - Transcription pipeline (async behavior, model used, transcript JSON format)
+  - Feed/Search/Profile features (likes, comments, follows if implemented)
+  - Admin tools (System Status, Errors & Debugging if present)
+  - Storage (uploads directory, adapters if present)
+  - Error contract + validation (AppError/standard response shapes if present)
+  - Rate limits/logging/observability if present
+
+4) Update / Create Docs Pages (in App Docs Library)
+Update existing pages and create new ones as needed. Minimum recommended docs set:
+
+A) “Getting Started”
+- Local dev prerequisites
+- How to run Expo + server
+- Database setup/migrations
+- Required env vars
+- How sessions work in local vs prod
+
+B) “Architecture Overview”
+- Frontend structure (expo-router, providers, React Query, playback)
+- Backend structure (Express routing, middleware)
+- Shared schema and typing across FE/BE
+
+C) “API Reference”
+- List endpoints by feature with:
+  - method + path
+  - auth required?
+  - request body/query/params
+  - response shape (success + error)
+  - common failure cases
+- Include byte-range streaming endpoint documentation.
+
+D) “Audio Pipeline”
+- Recording → trimming → optional vibe mixing → upload → streaming
+- File formats/encoding assumptions
+- ffmpeg requirements
+- Retry behavior / failure modes
+
+E) “Transcription”
+- Endpoint(s), async flow
+- Model used
+- Transcript JSON schema (word-level)
+- Costs/latency considerations
+- Safe testing approach
+
+F) “Admin Guide”
+- Admin roles/permissions
+- System Status & Errors/Debugging (if added)
+- How to resolve events, retry jobs
+- Safety: what is logged/redacted
+
+G) “Database Schema”
+- Tables overview + relationships
+- Key indexes
+- Migration strategy
+
+H) “Operational Guide”
+- Environment variables reference (complete list)
+- Storage configuration
+- Session configuration + cookie settings
+- CORS settings
+- Logging & request IDs
+
+I) “Troubleshooting”
+- Common issues (ffmpeg not found, upload failures, transcription key missing, cookie/session issues)
+- How to interpret logs/events
+- How to reproduce issues
+
+5) Add “What’s New Since Last Docs Sprint”
+Create a single page:
+- Title: “Changelog — Documentation Sprint (YYYY-MM-DD)”
+- Sections:
+  - New Features Added
+  - Changed Behavior
+  - New/Changed API Endpoints
+  - Database changes
+  - Config/Env var changes
+  - Known Issues / Tech Debt
+- Link to the relevant pages for each item.
+
+6) Ensure UI Consistency in Docs Library
+- Verify the Docs Library page styling matches the rest of the admin:
+  - DM Sans font everywhere
+  - same background/colors
+  - consistent headings, spacing, and code blocks
+- If the Docs Library uses a rich text editor or markdown renderer:
+  - standardize headings, code fences, callouts, and tables
+
+7) Add a “Docs Coverage Checklist” page
+Include a checklist that future sprints can reuse:
+- Screens/Routes documented
+- Providers documented
+- Endpoints documented
+- Env vars documented
+- Migrations documented
+- Admin tools documented
+- Integration keys documented (without exposing secrets)
+- Observability documented
+
+8) Verification
+- Spot-check 5–10 random endpoints and confirm docs match implementation.
+- Confirm all env vars referenced in code appear in Env Var docs.
+- Confirm docs navigation has no dead links.
+
+DELIVERABLES
+- Updated App Docs Library pages
+- New pages for any undocumented features
+- New “Changelog — Documentation Sprint (today’s date)” entry
+- New “Docs Coverage Checklist” entry
+- Any minor safe fixes needed only to make docs accurate (documented explicitly)
+
+Proceed carefully, keep changes non-destructive, and prioritize correctness over verbosity.

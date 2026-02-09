@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import * as solosService from "./solos.service";
 import { requireAuth } from "../../utils/auth-helpers";
+import { AppError } from "../../lib/errors";
 import { processSolo, retrySolo } from "../../processing/soloProcessor";
 import * as fs from "fs";
 
@@ -10,17 +11,17 @@ export async function create(req: Request, res: Response) {
 
   const file = req.file;
   if (!file) {
-    return res.status(400).json({ error: "No audio file provided" });
+    throw AppError.badRequest("No audio file provided");
   }
 
   const { title, durationMs, tags, trimStartMs, trimEndMs, vibeId } = req.body;
   if (!title) {
-    return res.status(400).json({ error: "title is required" });
+    throw AppError.validationFailed({ title: ["Title is required"] });
   }
 
   const user = await solosService.findUserById(userId);
   if (!user || !user.username) {
-    return res.status(400).json({ error: "Complete your profile setup first" });
+    throw AppError.badRequest("Complete your profile setup first");
   }
 
   const parsedTags = tags ? (typeof tags === 'string' ? JSON.parse(tags) : tags) : [];
@@ -60,7 +61,7 @@ export async function getStatus(req: Request, res: Response) {
   const { soloId } = req.params;
   const solo = await solosService.getSoloById(soloId);
   if (!solo) {
-    return res.status(404).json({ error: "Solo not found" });
+    throw AppError.notFound("Solo not found");
   }
 
   return res.json({
@@ -80,18 +81,18 @@ export async function retry(req: Request, res: Response) {
   const { soloId } = req.params;
   const solo = await solosService.getSoloById(soloId);
   if (!solo) {
-    return res.status(404).json({ error: "Solo not found" });
+    throw AppError.notFound("Solo not found");
   }
   if (solo.userId !== userId) {
-    return res.status(403).json({ error: "You can only retry your own solos" });
+    throw AppError.forbidden("You can only retry your own solos");
   }
   if (solo.status !== 'failed') {
-    return res.status(400).json({ error: "Solo is not in a failed state" });
+    throw AppError.badRequest("Solo is not in a failed state");
   }
 
   const requeued = await retrySolo(soloId);
   if (!requeued) {
-    return res.status(400).json({ error: "Could not re-queue solo" });
+    throw AppError.badRequest("Could not re-queue solo");
   }
 
   res.json({ id: soloId, status: 'queued', processingStep: 'upload' });
@@ -126,15 +127,15 @@ export async function remove(req: Request, res: Response) {
   const { soloId } = req.params;
   const solo = await solosService.getSoloById(soloId);
   if (!solo) {
-    return res.status(404).json({ error: "Solo not found" });
+    throw AppError.notFound("Solo not found");
   }
   if (solo.userId !== userId) {
-    return res.status(403).json({ error: "You can only delete your own solos" });
+    throw AppError.forbidden("You can only delete your own solos");
   }
 
   solosService.deleteAudioFile(solo.audioUrl);
   await solosService.deleteSolo(soloId);
-  return res.json({ success: true });
+  return res.json({ ok: true });
 }
 
 export async function update(req: Request, res: Response) {
@@ -144,10 +145,10 @@ export async function update(req: Request, res: Response) {
   const { soloId } = req.params;
   const solo = await solosService.getSoloById(soloId);
   if (!solo) {
-    return res.status(404).json({ error: "Solo not found" });
+    throw AppError.notFound("Solo not found");
   }
   if (solo.userId !== userId) {
-    return res.status(403).json({ error: "You can only edit your own solos" });
+    throw AppError.forbidden("You can only edit your own solos");
   }
 
   const { title, tags } = req.body;
@@ -156,7 +157,7 @@ export async function update(req: Request, res: Response) {
   if (tags !== undefined) updates.tags = Array.isArray(tags) ? tags : JSON.parse(tags);
 
   if (Object.keys(updates).length === 0) {
-    return res.status(400).json({ error: "Nothing to update" });
+    throw AppError.badRequest("Nothing to update");
   }
 
   const updated = await solosService.updateSolo(soloId, updates);
@@ -174,7 +175,7 @@ export function streamAudio(req: Request, res: Response) {
   const filePath = solosService.getAudioFilePath(fileId);
 
   if (!filePath) {
-    return res.status(404).json({ error: "Audio not found" });
+    throw AppError.notFound("Audio not found");
   }
 
   const stat = fs.statSync(filePath);
@@ -228,7 +229,7 @@ export async function transcribe(req: Request, res: Response) {
   const { soloId } = req.params;
   const solo = await solosService.getSoloById(soloId);
   if (!solo) {
-    return res.status(404).json({ error: "Solo not found" });
+    throw AppError.notFound("Solo not found");
   }
 
   if (solo.transcript) {
@@ -239,12 +240,12 @@ export async function transcribe(req: Request, res: Response) {
   const filePath = solosService.getAudioFilePath(fileId);
 
   if (!filePath) {
-    return res.status(404).json({ error: "Audio file not found" });
+    throw AppError.notFound("Audio file not found");
   }
 
   const transcript = await solosService.generateTranscript(soloId, filePath, solo.durationMs);
   if (!transcript) {
-    return res.status(500).json({ error: "Failed to transcribe audio" });
+    throw AppError.internal("Failed to transcribe audio");
   }
 
   return res.json({ transcript });

@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import * as authService from "./auth.service";
 import { requireAuth, getSessionCookie } from "../../utils/auth-helpers";
+import { AppError } from "../../lib/errors";
 import * as fs from "fs";
 import * as path from "path";
 import { AVATARS_DIR } from "../../utils/paths";
@@ -8,16 +9,16 @@ import { AVATARS_DIR } from "../../utils/paths";
 export async function signup(req: Request, res: Response) {
   const { email, password } = req.body;
   if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required" });
+    throw AppError.badRequest("Email and password are required");
   }
   if (password.length < 6) {
-    return res.status(400).json({ error: "Password must be at least 6 characters" });
+    throw AppError.validationFailed({ password: ["Password must be at least 6 characters"] });
   }
   const emailLower = email.toLowerCase().trim();
 
   const existing = await authService.findUserByEmail(emailLower);
   if (existing) {
-    return res.status(409).json({ error: "An account with this email already exists" });
+    throw AppError.conflict("An account with this email already exists");
   }
 
   const user = await authService.createUser(emailLower, password);
@@ -38,18 +39,18 @@ export async function signup(req: Request, res: Response) {
 export async function login(req: Request, res: Response) {
   const { email, password } = req.body;
   if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required" });
+    throw AppError.badRequest("Email and password are required");
   }
   const emailLower = email.toLowerCase().trim();
 
   const user = await authService.findUserByEmail(emailLower);
   if (!user) {
-    return res.status(401).json({ error: "Invalid email or password" });
+    throw AppError.unauthorized("Invalid email or password");
   }
 
   const valid = await authService.verifyPassword(password, user.passwordHash);
   if (!valid) {
-    return res.status(401).json({ error: "Invalid email or password" });
+    throw AppError.unauthorized("Invalid email or password");
   }
 
   req.session.userId = user.id;
@@ -68,23 +69,23 @@ export async function login(req: Request, res: Response) {
 export function logout(req: Request, res: Response) {
   req.session.destroy((err) => {
     if (err) {
-      return res.status(500).json({ error: "Failed to log out" });
+      return res.status(500).json({ ok: false, error: { code: "INTERNAL_ERROR", message: "Failed to log out" } });
     }
     res.clearCookie("connect.sid");
-    return res.json({ success: true });
+    return res.json({ ok: true });
   });
 }
 
 export async function me(req: Request, res: Response) {
   const userId = req.session?.userId;
   if (!userId) {
-    return res.status(401).json({ error: "Not authenticated" });
+    throw AppError.unauthorized();
   }
 
   const user = await authService.findUserById(userId);
   if (!user) {
     req.session.destroy(() => {});
-    return res.status(401).json({ error: "User not found" });
+    throw AppError.unauthorized("User not found");
   }
   return res.json({
     id: user.id,
@@ -105,11 +106,11 @@ export async function updateProfile(req: Request, res: Response) {
   if (username) {
     const usernameLower = username.toLowerCase().trim();
     if (!/^[a-z0-9_]{3,20}$/.test(usernameLower)) {
-      return res.status(400).json({ error: "Username must be 3-20 characters, only letters, numbers, and underscores" });
+      throw AppError.validationFailed({ username: ["Username must be 3-20 characters, only letters, numbers, and underscores"] });
     }
     const available = await authService.checkUsernameAvailable(usernameLower, userId);
     if (!available) {
-      return res.status(409).json({ error: "Username is already taken" });
+      throw AppError.conflict("Username is already taken");
     }
     updates.username = usernameLower;
   }
@@ -123,7 +124,7 @@ export async function updateProfile(req: Request, res: Response) {
   }
 
   if (Object.keys(updates).length === 0) {
-    return res.status(400).json({ error: "No updates provided" });
+    throw AppError.badRequest("No updates provided");
   }
 
   const updated = await authService.updateProfile(userId, updates);
@@ -143,7 +144,7 @@ export function serveAvatar(req: Request, res: Response) {
   const filePath = path.join(AVATARS_DIR, sanitized);
 
   if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: "Avatar not found" });
+    throw AppError.notFound("Avatar not found");
   }
 
   const ext = path.extname(sanitized).toLowerCase();

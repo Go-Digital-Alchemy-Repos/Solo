@@ -3,6 +3,7 @@ import cookieSignature from "cookie-signature";
 import { db } from "../db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { AppError } from "../lib/errors";
 
 export async function requireAuth(req: Request, res: Response): Promise<string | null> {
   let userId = req.session?.userId;
@@ -36,8 +37,7 @@ export async function requireAuth(req: Request, res: Response): Promise<string |
   }
 
   if (!userId) {
-    res.status(401).json({ error: "Not authenticated" });
-    return null;
+    throw AppError.unauthorized();
   }
   return userId;
 }
@@ -51,14 +51,12 @@ export function getSessionCookie(req: Request): string {
 export async function requireAdmin(req: Request, res: Response): Promise<string | null> {
   const userId = req.session?.userId;
   if (!userId) {
-    res.status(401).json({ error: "Not authenticated" });
-    return null;
+    throw AppError.unauthorized();
   }
 
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user || !user.isAdmin) {
-    res.status(403).json({ error: "Admin access required" });
-    return null;
+    throw AppError.forbidden("Admin access required");
   }
 
   return userId;

@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import * as adminService from "./admin.service";
 import * as integrationsService from "./integrations.service";
 import { requireAdmin } from "../../utils/auth-helpers";
+import { AppError } from "../../lib/errors";
 import { scanAllRoutes, createStubDocument, mergeContent, generateAutoSection } from "../../utils/routeScanner";
 import * as fs from "fs";
 import * as path from "path";
@@ -10,21 +11,21 @@ import { DOCS_DIR } from "../../utils/paths";
 export async function login(req: Request, res: Response) {
   const { email, password } = req.body;
   if (!email || !password) {
-    return res.status(400).json({ error: "Email and password required" });
+    throw AppError.badRequest("Email and password required");
   }
 
   const user = await adminService.findUserByEmail(email);
   if (!user) {
-    return res.status(401).json({ error: "Invalid credentials" });
+    throw AppError.unauthorized("Invalid credentials");
   }
 
   const valid = await adminService.verifyPassword(password, user.passwordHash);
   if (!valid) {
-    return res.status(401).json({ error: "Invalid credentials" });
+    throw AppError.unauthorized("Invalid credentials");
   }
 
   if (!user.isAdmin) {
-    return res.status(403).json({ error: "Admin access required" });
+    throw AppError.forbidden("Admin access required");
   }
 
   req.session.userId = user.id;
@@ -52,10 +53,10 @@ export async function me(req: Request, res: Response) {
 export function logout(req: Request, res: Response) {
   req.session.destroy((err) => {
     if (err) {
-      return res.status(500).json({ error: "Logout failed" });
+      return res.status(500).json({ ok: false, error: { code: "INTERNAL_ERROR", message: "Logout failed" } });
     }
     res.clearCookie("connect.sid");
-    return res.json({ success: true });
+    return res.json({ ok: true });
   });
 }
 
@@ -92,12 +93,12 @@ export async function updateUser(req: Request, res: Response) {
   if (isAdmin !== undefined) updates.isAdmin = isAdmin;
 
   if (Object.keys(updates).length === 0) {
-    return res.status(400).json({ error: "No fields to update" });
+    throw AppError.badRequest("No fields to update");
   }
 
   const updated = await adminService.updateUser(userId, updates);
   if (!updated) {
-    return res.status(404).json({ error: "User not found" });
+    throw AppError.notFound("User not found");
   }
 
   return res.json(updated);
@@ -110,11 +111,11 @@ export async function deleteUser(req: Request, res: Response) {
   const { userId } = req.params;
 
   if (userId === adminId) {
-    return res.status(400).json({ error: "Cannot delete your own admin account" });
+    throw AppError.badRequest("Cannot delete your own admin account");
   }
 
   await adminService.deleteUser(userId);
-  return res.json({ success: true });
+  return res.json({ ok: true });
 }
 
 export async function listDocs(req: Request, res: Response) {
@@ -225,7 +226,7 @@ export async function readDoc(req: Request, res: Response) {
   const doc = adminService.readDoc(docPath);
 
   if (!doc) {
-    return res.status(404).json({ error: "Document not found" });
+    throw AppError.notFound("Document not found");
   }
 
   return res.json(doc);
@@ -268,7 +269,7 @@ export async function syncDocs(req: Request, res: Response) {
     }
   }
 
-  return res.json({ success: true, summary, details });
+  return res.json({ ok: true, summary, details });
 }
 
 export async function getIntegrations(req: Request, res: Response) {
@@ -287,11 +288,11 @@ export async function saveIntegration(req: Request, res: Response) {
   const validServices: integrationsService.ServiceName[] = ["mailgun", "cloudflare_r2", "twilio"];
 
   if (!validServices.includes(service)) {
-    return res.status(400).json({ error: "Invalid service name" });
+    throw AppError.validationFailed({ service: ["Invalid service name. Must be one of: mailgun, cloudflare_r2, twilio"] });
   }
 
   const result = await integrationsService.saveIntegration(service, config, enabled ?? false);
-  return res.json({ success: true, integration: result });
+  return res.json({ ok: true, integration: result });
 }
 
 export async function testIntegration(req: Request, res: Response) {
@@ -302,7 +303,7 @@ export async function testIntegration(req: Request, res: Response) {
   const validServices: integrationsService.ServiceName[] = ["mailgun", "cloudflare_r2", "twilio"];
 
   if (!validServices.includes(service as integrationsService.ServiceName)) {
-    return res.status(400).json({ error: "Invalid service name" });
+    throw AppError.validationFailed({ service: ["Invalid service name. Must be one of: mailgun, cloudflare_r2, twilio"] });
   }
 
   const result = await integrationsService.testIntegration(service as integrationsService.ServiceName);
