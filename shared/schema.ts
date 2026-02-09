@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, jsonb, serial, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, jsonb, serial, boolean, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -77,6 +77,12 @@ export const appDocs = pgTable("app_docs", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const soloStatus = ['queued', 'processing', 'ready', 'failed'] as const;
+export type SoloStatus = typeof soloStatus[number];
+
+export const soloProcessingStep = ['upload', 'trim', 'mix', 'transcribe', 'done'] as const;
+export type SoloProcessingStep = typeof soloProcessingStep[number];
+
 export const solos = pgTable("solos", {
   id: varchar("id")
     .primaryKey()
@@ -91,7 +97,16 @@ export const solos = pgTable("solos", {
   durationMs: integer("duration_ms").notNull().default(0),
   displayName: text("display_name"),
   transcript: jsonb("transcript"),
-});
+  status: text("status").notNull().default('ready'),
+  processingStep: text("processing_step").notNull().default('done'),
+  processingError: text("processing_error"),
+  attempts: integer("attempts").notNull().default(0),
+  lastAttemptAt: timestamp("last_attempt_at"),
+  readyAt: timestamp("ready_at"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("solos_status_updated_idx").on(table.status, table.updatedAt),
+]);
 
 export const systemIntegrations = pgTable("system_integrations", {
   id: serial("id").primaryKey(),
@@ -133,6 +148,8 @@ export const insertSoloSchema = createInsertSchema(solos).pick({
   durationMs: true,
   displayName: true,
   transcript: true,
+  status: true,
+  processingStep: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
