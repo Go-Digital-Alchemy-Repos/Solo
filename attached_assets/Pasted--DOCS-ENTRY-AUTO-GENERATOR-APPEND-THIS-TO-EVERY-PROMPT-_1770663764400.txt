@@ -1,0 +1,120 @@
+========================
+DOCS ENTRY AUTO-GENERATOR (APPEND THIS TO EVERY PROMPT)
+========================
+
+END-OF-PROMPT REQUIREMENT (MANDATORY):
+After completing ALL code changes, update the Admin → Docs Library using the Docs Governance System.
+
+CRITICAL DOCS RULES:
+- NON-DESTRUCTIVE: Do not delete or overwrite existing docs entries; update or add.
+- Docs must be technical and thorough, written for developers.
+- Use the standard doc template sections exactly (Overview, Architecture, Database, APIs, Frontend Integration, Security Considerations, Operational Notes, Related Docs).
+- Use categories consistently. If unsure, choose the closest from:
+  Getting Started, Architecture, CMS, CRM, Media, SEO, Security, Integrations, Performance, Theming, Routing, Database, APIs, Deployment.
+
+WHAT TO DOCUMENT (REQUIRED):
+1) Create or update a Doc entry for EACH major feature added/changed in this prompt.
+2) Create or update a Doc entry for EACH backend endpoint added/changed.
+3) Create or update a Doc entry for EACH database table/column/index added/changed.
+4) Create or update a Doc entry for EACH admin route/page added/changed.
+5) Create or update a Doc entry for EACH public route/page changed to support new features.
+6) Document new dependencies and why they were added.
+
+DOC ENTRY CREATION METHOD:
+- Use the internal docs API/helper (preferred):
+  - server/utils/docsLogger logFeatureDocumentation(...) OR
+  - POST /api/admin/docs
+- Ensure each entry has:
+  - category
+  - title
+  - slug
+  - tags (include: feature name, component name, table name, endpoint path)
+  - related docs (cross-link to the most relevant existing entries)
+  - version (increment if updating existing docs)
+  - author (system or developer)
+
+DOC STRUCTURE (REQUIRED FORMAT):
+For each created/updated doc entry, follow this Markdown skeleton:
+
+# <TITLE>
+
+## Overview
+- What was added/changed
+- Why it exists (problem solved)
+- Where it is used (admin/public)
+
+## Architecture
+- High-level flow (bullets)
+- Key modules/files involved
+- Data flow from UI → API → DB (if applicable)
+
+## Database
+- Tables affected
+- Columns/indexes added/changed
+- Constraints/relationships
+- Migration notes (Drizzle migration name + how to run)
+
+## APIs
+For each endpoint:
+- METHOD /path
+- Auth requirement (role/guard)
+- Request schema (example JSON)
+- Response schema (example JSON)
+- Error cases (400/401/403/404/409/429/500)
+- Notes on pagination/filtering (if any)
+
+## Frontend Integration
+- Routes/pages affected
+- Components added/updated
+- State management / fetching approach
+- Validation behavior
+- UX notes and edge cases
+
+## Security Considerations
+- Validation (zod)
+- Rate limiting / spam protection (if relevant)
+- Authorization model (RBAC roles)
+- File upload constraints (if relevant)
+- Sensitive data handling
+
+## Operational Notes
+- Performance/caching considerations
+- Invalidation rules (if caching)
+- Local dev setup changes
+- Known limitations + follow-ups
+
+## Related Docs
+- Link to existing docs by slug/title (at least 2 if possible)
+- Include: “Docs Governance System” and any relevant category entries
+
+DOCS NAVIGATION / ORGANIZATION REQUIREMENTS:
+- Ensure docs are placed in the correct category and show up in the left nav.
+- Add “Related Docs” cross-links so an engineer can traverse the system.
+- If a new feature spans multiple areas (e.g., CMS + SEO + Security), create separate entries in each category and cross-link them.
+
+MINIMUM REQUIRED DOC ENTRIES FOR ANY PROMPT:
+At least:
+- 1 Feature doc (category = feature area, e.g., CMS/CRM/SEO)
+- 1 API doc (category = APIs) listing endpoints changed in this prompt
+- 1 Database doc (category = Database) listing schema changes in this prompt
+If any of these are not applicable, explicitly document “No changes in this area” in an entry titled “<Prompt Name> — Change Log”.
+
+FINAL DOCS QUALITY CHECK (REQUIRED):
+Run the “Validate Docs Library” tool in Admin (or equivalent) and fix warnings for:
+- missing category
+- missing required sections
+- duplicate titles
+- empty bodies
+- missing related docs links
+
+CONFIRMATION:
+At the end, output a short summary in the Docs Change Log entry:
+- Docs created: <n>
+- Docs updated: <n>
+- Categories touched: <list>
+- Key endpoints documented: <list>
+- Key tables documented: <list>
+
+========================
+END DOCS ENTRY AUTO-GENERATOR
+========================
