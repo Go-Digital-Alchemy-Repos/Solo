@@ -2,26 +2,40 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { StyleSheet, View, Text, Pressable, Platform, PanResponder, LayoutChangeEvent, TextInput, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
+import { getApiUrl } from '@/lib/query-client';
 import type { TranscriptWord } from '@/lib/data-context';
 
 const HANDLE_WIDTH = 20;
 const BAR_COUNT = 80;
 const BAR_GAP = 1.5;
 const MIN_SELECTION_MS = 5000;
+const HANDLE_HIT_SLOP = 24;
 
 const CATEGORY_OPTIONS = [
   'Sports', 'Politics', 'Business', 'Religion', 'Pop Culture',
   'Tech', 'Lifestyle', 'Music', 'Comedy', 'Health', 'News', 'Education',
 ];
 
+interface Vibe {
+  id: string;
+  label: string;
+  icon: string;
+}
+
+const VIBES: Vibe[] = [
+  { id: 'coffee-shop', label: 'Coffee Shop', icon: 'coffee' },
+  { id: 'nature', label: 'Nature', icon: 'tree' },
+  { id: 'lofi-beat', label: 'Lofi Beat', icon: 'music' },
+];
+
 interface WaveformTrimmerProps {
   audioUri: string;
   durationMs: number;
   onCancel: () => void;
-  onPost: (title: string, trimStartMs: number, trimEndMs: number, tags: string[]) => void;
+  onPost: (title: string, trimStartMs: number, trimEndMs: number, tags: string[], vibeId: string | null) => void;
   isPosting: boolean;
   transcript?: { text: string; words: TranscriptWord[] } | null;
   segmentMarkers?: number[];
@@ -75,14 +89,18 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
   const [playbackPos, setPlaybackPos] = useState(0);
   const [title, setTitle] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedVibe, setSelectedVibe] = useState<string | null>(null);
+  const [vibeExpanded, setVibeExpanded] = useState(false);
 
   const soundRef = useRef<Audio.Sound | null>(null);
+  const vibeSoundRef = useRef<Audio.Sound | null>(null);
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastHapticRef = useRef(0);
   const startFracOnGrant = useRef(0);
   const endFracOnGrant = useRef(1);
   const trimStartFracRef = useRef(0);
   const trimEndFracRef = useRef(1);
+  const isDraggingRef = useRef<'left' | 'right' | 'scrub' | null>(null);
 
   useEffect(() => { trimStartFracRef.current = trimStartFrac; }, [trimStartFrac]);
   useEffect(() => { trimEndFracRef.current = trimEndFrac; }, [trimEndFrac]);
@@ -106,6 +124,30 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
     }
   }, []);
 
+  const stopVibePlayback = useCallback(async () => {
+    if (vibeSoundRef.current) {
+      try {
+        await vibeSoundRef.current.stopAsync();
+        await vibeSoundRef.current.unloadAsync();
+      } catch {}
+      vibeSoundRef.current = null;
+    }
+  }, []);
+
+  const startVibePlayback = useCallback(async (vibeId: string) => {
+    await stopVibePlayback();
+    try {
+      const baseUrl = getApiUrl();
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: `${baseUrl}api/vibes/${vibeId}/audio` },
+        { shouldPlay: true, isLooping: true, volume: 0.1 }
+      );
+      vibeSoundRef.current = sound;
+    } catch (e) {
+      console.error('Failed to play vibe:', e);
+    }
+  }, [stopVibePlayback]);
+
   const cleanupPlayback = useCallback(async () => {
     if (playbackIntervalRef.current) {
       clearInterval(playbackIntervalRef.current);
@@ -118,8 +160,9 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
       } catch {}
       soundRef.current = null;
     }
+    await stopVibePlayback();
     setIsPlaying(false);
-  }, []);
+  }, [stopVibePlayback]);
 
   const startPlaybackInterval = useCallback(() => {
     if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
@@ -151,6 +194,9 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
         soundRef.current = sound;
         setIsPlaying(true);
         startPlaybackInterval();
+        if (selectedVibe) {
+          startVibePlayback(selectedVibe);
+        }
       } else {
         await soundRef.current.setPositionAsync(Math.round(posMs));
         const status = await soundRef.current.getStatusAsync();
@@ -164,7 +210,7 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
     } catch (e) {
       console.error('Seek failed:', e);
     }
-  }, [audioUri, startPlaybackInterval]);
+  }, [audioUri, startPlaybackInterval, selectedVibe, startVibePlayback]);
 
   const togglePlayPause = useCallback(async () => {
     if (isPlaying) {
@@ -179,11 +225,14 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
       soundRef.current = sound;
       setIsPlaying(true);
       startPlaybackInterval();
+      if (selectedVibe) {
+        startVibePlayback(selectedVibe);
+      }
     } catch (e) {
       console.error('Preview playback failed:', e);
       setIsPlaying(false);
     }
-  }, [isPlaying, audioUri, trimStartMs, cleanupPlayback, startPlaybackInterval]);
+  }, [isPlaying, audioUri, trimStartMs, cleanupPlayback, startPlaybackInterval, selectedVibe, startVibePlayback]);
 
   useEffect(() => {
     return () => {
@@ -192,78 +241,82 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
         soundRef.current.stopAsync().catch(() => {});
         soundRef.current.unloadAsync().catch(() => {});
       }
+      if (vibeSoundRef.current) {
+        vibeSoundRef.current.stopAsync().catch(() => {});
+        vibeSoundRef.current.unloadAsync().catch(() => {});
+      }
     };
   }, []);
 
-  const leftHandleResponder = useMemo(() => {
-    if (trackWidth <= 0) return null;
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        startFracOnGrant.current = trimStartFrac;
-        triggerHaptic();
-      },
-      onPanResponderMove: (_, gestureState) => {
-        const fracDelta = gestureState.dx / trackWidth;
-        let newStart = Math.max(0, startFracOnGrant.current + fracDelta);
-        const maxStart = trimEndFrac - (MIN_SELECTION_MS / durationMs);
-        newStart = Math.min(newStart, maxStart);
-        setTrimStartFrac(newStart);
-        triggerHaptic();
-      },
-      onPanResponderRelease: () => {
-        if (Platform.OS !== 'web') {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        }
-      },
-    });
-  }, [trackWidth, trimStartFrac, trimEndFrac, durationMs, triggerHaptic]);
+  const getTouchTarget = useCallback((locationX: number): 'left' | 'right' | 'scrub' => {
+    if (trackWidth <= 0) return 'scrub';
+    const leftHandleCenter = trimStartFracRef.current * trackWidth + HANDLE_WIDTH / 2;
+    const rightHandleCenter = HANDLE_WIDTH + trimEndFracRef.current * trackWidth + HANDLE_WIDTH / 2;
 
-  const rightHandleResponder = useMemo(() => {
-    if (trackWidth <= 0) return null;
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        endFracOnGrant.current = trimEndFrac;
-        triggerHaptic();
-      },
-      onPanResponderMove: (_, gestureState) => {
-        const fracDelta = gestureState.dx / trackWidth;
-        let newEnd = Math.min(1, endFracOnGrant.current + fracDelta);
-        const minEnd = trimStartFrac + (MIN_SELECTION_MS / durationMs);
-        newEnd = Math.max(newEnd, minEnd);
-        setTrimEndFrac(newEnd);
-        triggerHaptic();
-      },
-      onPanResponderRelease: () => {
-        if (Platform.OS !== 'web') {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        }
-      },
-    });
-  }, [trackWidth, trimStartFrac, trimEndFrac, durationMs, triggerHaptic]);
+    const distLeft = Math.abs(locationX - leftHandleCenter);
+    const distRight = Math.abs(locationX - rightHandleCenter);
 
-  const scrubResponder = useMemo(() => {
+    if (distLeft < HANDLE_HIT_SLOP && distLeft <= distRight) return 'left';
+    if (distRight < HANDLE_HIT_SLOP) return 'right';
+    return 'scrub';
+  }, [trackWidth]);
+
+  const unifiedResponder = useMemo(() => {
     if (trackWidth <= 0) return null;
     return PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 2,
       onPanResponderGrant: (evt) => {
         const touchX = evt.nativeEvent.locationX;
-        const frac = Math.max(trimStartFracRef.current, Math.min(trimEndFracRef.current, touchX / (trackWidth + HANDLE_WIDTH * 2)));
-        seekToPosition(frac * durationMs);
-        triggerHaptic();
+        const target = getTouchTarget(touchX);
+        isDraggingRef.current = target;
+
+        if (target === 'left') {
+          startFracOnGrant.current = trimStartFracRef.current;
+          triggerHaptic();
+        } else if (target === 'right') {
+          endFracOnGrant.current = trimEndFracRef.current;
+          triggerHaptic();
+        } else {
+          const totalWidth = trackWidth + HANDLE_WIDTH * 2;
+          const frac = Math.max(trimStartFracRef.current, Math.min(trimEndFracRef.current, touchX / totalWidth));
+          seekToPosition(frac * durationMs);
+          triggerHaptic();
+        }
       },
-      onPanResponderMove: (evt) => {
-        const touchX = evt.nativeEvent.locationX;
-        const frac = Math.max(trimStartFracRef.current, Math.min(trimEndFracRef.current, touchX / (trackWidth + HANDLE_WIDTH * 2)));
-        seekToPosition(frac * durationMs);
+      onPanResponderMove: (evt, gestureState) => {
+        const target = isDraggingRef.current;
+        if (target === 'left') {
+          const fracDelta = gestureState.dx / trackWidth;
+          let newStart = Math.max(0, startFracOnGrant.current + fracDelta);
+          const maxStart = trimEndFracRef.current - (MIN_SELECTION_MS / durationMs);
+          newStart = Math.min(newStart, maxStart);
+          setTrimStartFrac(newStart);
+          triggerHaptic();
+        } else if (target === 'right') {
+          const fracDelta = gestureState.dx / trackWidth;
+          let newEnd = Math.min(1, endFracOnGrant.current + fracDelta);
+          const minEnd = trimStartFracRef.current + (MIN_SELECTION_MS / durationMs);
+          newEnd = Math.max(newEnd, minEnd);
+          setTrimEndFrac(newEnd);
+          triggerHaptic();
+        } else {
+          const touchX = evt.nativeEvent.locationX;
+          const totalWidth = trackWidth + HANDLE_WIDTH * 2;
+          const frac = Math.max(trimStartFracRef.current, Math.min(trimEndFracRef.current, touchX / totalWidth));
+          seekToPosition(frac * durationMs);
+        }
       },
-      onPanResponderRelease: () => {},
+      onPanResponderRelease: () => {
+        if (isDraggingRef.current === 'left' || isDraggingRef.current === 'right') {
+          if (Platform.OS !== 'web') {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          }
+        }
+        isDraggingRef.current = null;
+      },
     });
-  }, [trackWidth, durationMs, seekToPosition, triggerHaptic]);
+  }, [trackWidth, durationMs, seekToPosition, triggerHaptic, getTouchTarget]);
 
   const playbackFrac = durationMs > 0 ? playbackPos / durationMs : 0;
   const playbackSec = playbackPos / 1000;
@@ -275,6 +328,7 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
   }, [transcript, playbackSec, isPlaying]);
 
   const bubbleLeftPx = HANDLE_WIDTH + playbackFrac * trackWidth;
+
   const toggleTag = useCallback((tag: string) => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -284,21 +338,50 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
     );
   }, []);
 
+  const handleVibeSelect = useCallback(async (vibeId: string | null) => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    if (vibeId === null || selectedVibe === vibeId) {
+      setSelectedVibe(null);
+      await stopVibePlayback();
+    } else {
+      setSelectedVibe(vibeId);
+      if (isPlaying) {
+        await startVibePlayback(vibeId);
+      } else {
+        await startVibePlayback(vibeId);
+        setTimeout(() => stopVibePlayback(), 3000);
+      }
+    }
+  }, [selectedVibe, isPlaying, startVibePlayback, stopVibePlayback]);
+
+  const getVibeIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'coffee': return <MaterialCommunityIcons name="coffee" size={16} color={Colors.accent} />;
+      case 'tree': return <Ionicons name="leaf" size={16} color="#4CAF50" />;
+      case 'music': return <MaterialCommunityIcons name="music-note" size={16} color="#9C27B0" />;
+      default: return <Ionicons name="musical-note" size={16} color={Colors.textDim} />;
+    }
+  };
+
   const canPost = title.trim().length > 0 && selectionMs >= MIN_SELECTION_MS && !isPosting;
 
   const handlePost = useCallback(() => {
     if (!canPost) return;
     cleanupPlayback();
-    onPost(title.trim(), trimStartMs, trimEndMs, selectedTags);
-  }, [canPost, cleanupPlayback, onPost, title, trimStartMs, trimEndMs, selectedTags]);
+    onPost(title.trim(), trimStartMs, trimEndMs, selectedTags, selectedVibe);
+  }, [canPost, cleanupPlayback, onPost, title, trimStartMs, trimEndMs, selectedTags, selectedVibe]);
 
   const handleCancel = useCallback(() => {
     cleanupPlayback();
     onCancel();
   }, [cleanupPlayback, onCancel]);
 
+  const selectedVibeLabel = VIBES.find(v => v.id === selectedVibe)?.label;
+
   return (
-    <View style={[styles.container, { paddingTop: topInset }]}>
+    <ScrollView style={[styles.container, { paddingTop: topInset }]} contentContainerStyle={{ paddingBottom: bottomInset + 20 }} keyboardShouldPersistTaps="handled">
       <View style={styles.header}>
         <Pressable onPress={handleCancel} style={styles.cancelBtn} hitSlop={16}>
           <Text style={styles.cancelText}>Cancel</Text>
@@ -324,26 +407,6 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
         returnKeyType="done"
       />
 
-      <View style={styles.tagSection}>
-        <Text style={styles.tagLabel}>Topics</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagScroll}>
-          {CATEGORY_OPTIONS.map(tag => {
-            const isSelected = selectedTags.includes(tag);
-            return (
-              <Pressable
-                key={tag}
-                onPress={() => toggleTag(tag)}
-                style={[styles.tagChip, isSelected && styles.tagChipActive]}
-              >
-                <Text style={[styles.tagChipText, isSelected && styles.tagChipTextActive]}>
-                  {tag}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-
       <View style={styles.timeRow}>
         <Text style={styles.timeLabel}>{formatTime(trimStartMs)}</Text>
         <Text style={styles.selectionLabel}>{formatTime(selectionMs)}</Text>
@@ -363,13 +426,12 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
       <View style={styles.trimmerOuter}>
         <View style={styles.trimmerContainer} onLayout={onLayout}>
           {containerWidth > 0 && (
-            <>
+            <View style={styles.waveformTouchArea} {...(unifiedResponder?.panHandlers || {})}>
               <View style={[styles.dimOverlay, { left: 0, width: HANDLE_WIDTH + trimStartFrac * trackWidth }]} />
               <View style={[styles.dimOverlay, { right: 0, width: HANDLE_WIDTH + (1 - trimEndFrac) * trackWidth }]} />
 
               <View
                 style={[styles.handle, styles.handleLeft, { left: trimStartFrac * trackWidth }]}
-                {...(leftHandleResponder?.panHandlers || {})}
               >
                 <View style={styles.handleGrip} />
                 <View style={styles.handleGrip} />
@@ -378,7 +440,6 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
 
               <View
                 style={[styles.handle, styles.handleRight, { left: HANDLE_WIDTH + trimEndFrac * trackWidth }]}
-                {...(rightHandleResponder?.panHandlers || {})}
               >
                 <View style={styles.handleGrip} />
                 <View style={styles.handleGrip} />
@@ -390,10 +451,7 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
                 width: (trimEndFrac - trimStartFrac) * trackWidth,
               }]} />
 
-              <View
-                style={styles.waveformTouchArea}
-                {...(scrubResponder?.panHandlers || {})}
-              >
+              <View style={styles.barsContainer}>
                 {waveformData.map((amp, i) => {
                   const barFrac = i / BAR_COUNT;
                   const isInSelection = barFrac >= trimStartFrac && barFrac <= trimEndFrac;
@@ -425,10 +483,10 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
               {playbackFrac > 0 && (
                 <View style={[styles.playhead, { left: HANDLE_WIDTH + playbackFrac * trackWidth }]} />
               )}
-            </>
+            </View>
           )}
         </View>
-        <Text style={styles.scrubHint}>Drag across waveform to scrub</Text>
+        <Text style={styles.scrubHint}>Drag handles to trim, tap waveform to scrub</Text>
       </View>
 
       <View style={styles.controls}>
@@ -440,7 +498,74 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
         </Pressable>
         <Text style={styles.previewLabel}>{isPlaying ? 'Playing' : 'Preview'}</Text>
       </View>
-    </View>
+
+      <View style={styles.vibeSection}>
+        {!vibeExpanded ? (
+          <Pressable onPress={() => setVibeExpanded(true)} style={styles.vibeCollapsed}>
+            <Ionicons name="musical-notes-outline" size={16} color={selectedVibe ? Colors.accent : Colors.textDim} />
+            <Text style={[styles.vibeCollapsedLabel, selectedVibe && { color: Colors.accent }]}>
+              {selectedVibe ? selectedVibeLabel : 'Add Background Vibe'}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color={Colors.textMuted} />
+          </Pressable>
+        ) : (
+          <View style={styles.vibePanel}>
+            <View style={styles.vibePanelHeader}>
+              <View style={styles.vibePanelHeaderLeft}>
+                <Ionicons name="musical-notes" size={16} color={Colors.accent} />
+                <Text style={styles.vibePanelTitle}>Background Vibes</Text>
+              </View>
+              <Pressable onPress={() => setVibeExpanded(false)}>
+                <Ionicons name="chevron-up" size={18} color={Colors.textMuted} />
+              </Pressable>
+            </View>
+            <Text style={styles.vibeSubtitle}>Mixed at 10% volume behind your voice</Text>
+            <View style={styles.vibeRow}>
+              <Pressable
+                onPress={() => handleVibeSelect(null)}
+                style={[styles.vibeChip, !selectedVibe && styles.vibeChipActive]}
+              >
+                <Ionicons name="volume-mute" size={14} color={!selectedVibe ? Colors.bg : Colors.textDim} />
+                <Text style={[styles.vibeChipText, !selectedVibe && styles.vibeChipTextActive]}>None</Text>
+              </Pressable>
+              {VIBES.map(vibe => {
+                const isSelected = selectedVibe === vibe.id;
+                return (
+                  <Pressable
+                    key={vibe.id}
+                    onPress={() => handleVibeSelect(vibe.id)}
+                    style={[styles.vibeChip, isSelected && styles.vibeChipActive]}
+                  >
+                    {getVibeIcon(vibe.icon)}
+                    <Text style={[styles.vibeChipText, isSelected && styles.vibeChipTextActive]}>{vibe.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.tagSection}>
+        <Text style={styles.tagLabel}>Topics</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagScroll}>
+          {CATEGORY_OPTIONS.map(tag => {
+            const isSelected = selectedTags.includes(tag);
+            return (
+              <Pressable
+                key={tag}
+                onPress={() => toggleTag(tag)}
+                style={[styles.tagChip, isSelected && styles.tagChipActive]}
+              >
+                <Text style={[styles.tagChipText, isSelected && styles.tagChipTextActive]}>
+                  {tag}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -504,41 +629,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 215, 0, 0.1)',
   },
-  tagSection: {
-    marginTop: 12,
-    gap: 6,
-  },
-  tagLabel: {
-    color: Colors.textDim,
-    fontSize: 12,
-    fontFamily: 'DMSans_600SemiBold',
-    paddingHorizontal: 16,
-  },
-  tagScroll: {
-    paddingHorizontal: 16,
-    gap: 6,
-  },
-  tagChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  tagChipActive: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
-  },
-  tagChipText: {
-    color: Colors.textDim,
-    fontSize: 12,
-    fontFamily: 'DMSans_500Medium',
-  },
-  tagChipTextActive: {
-    color: Colors.bg,
-    fontFamily: 'DMSans_700Bold',
-  },
   timeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -595,11 +685,19 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
+    zIndex: 10,
+  },
+  barsContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: BAR_GAP,
     paddingHorizontal: HANDLE_WIDTH + 4,
-    zIndex: 3,
+    pointerEvents: 'none' as any,
   },
   bar: {
     flex: 1,
@@ -611,7 +709,8 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    zIndex: 5,
+    zIndex: 1,
+    pointerEvents: 'none' as any,
   },
   handle: {
     position: 'absolute',
@@ -619,10 +718,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: HANDLE_WIDTH,
     backgroundColor: Colors.accent,
-    zIndex: 10,
+    zIndex: 2,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
+    pointerEvents: 'none' as any,
   },
   handleLeft: {
     borderTopLeftRadius: 18,
@@ -645,7 +745,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 2,
     borderBottomWidth: 2,
     borderColor: Colors.accent,
-    zIndex: 4,
+    zIndex: 1,
+    pointerEvents: 'none' as any,
   },
   playhead: {
     position: 'absolute',
@@ -653,7 +754,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 2,
     backgroundColor: '#FFFFFF',
-    zIndex: 8,
+    zIndex: 3,
+    pointerEvents: 'none' as any,
   },
   scrubHint: {
     color: Colors.textMuted,
@@ -665,7 +767,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 24,
     gap: 6,
-    paddingBottom: 20,
   },
   playPauseBtn: {
     width: 64,
@@ -679,5 +780,119 @@ const styles = StyleSheet.create({
     color: Colors.textDim,
     fontSize: 12,
     fontFamily: 'DMSans_500Medium',
+  },
+  vibeSection: {
+    marginTop: 20,
+    paddingHorizontal: 16,
+  },
+  vibeCollapsed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  vibeCollapsedLabel: {
+    color: Colors.textDim,
+    fontSize: 13,
+    fontFamily: 'DMSans_500Medium',
+  },
+  vibePanel: {
+    backgroundColor: 'rgba(255, 215, 0, 0.04)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.12)',
+    padding: 14,
+    gap: 8,
+  },
+  vibePanelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  vibePanelHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  vibePanelTitle: {
+    color: Colors.accent,
+    fontSize: 13,
+    fontFamily: 'DMSans_600SemiBold',
+  },
+  vibeSubtitle: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    fontFamily: 'DMSans_400Regular',
+  },
+  vibeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  vibeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  vibeChipActive: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
+  },
+  vibeChipText: {
+    color: Colors.textDim,
+    fontSize: 12,
+    fontFamily: 'DMSans_500Medium',
+  },
+  vibeChipTextActive: {
+    color: Colors.bg,
+    fontFamily: 'DMSans_700Bold',
+  },
+  tagSection: {
+    marginTop: 16,
+    gap: 6,
+  },
+  tagLabel: {
+    color: Colors.textDim,
+    fontSize: 12,
+    fontFamily: 'DMSans_600SemiBold',
+    paddingHorizontal: 16,
+  },
+  tagScroll: {
+    paddingHorizontal: 16,
+    gap: 6,
+  },
+  tagChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  tagChipActive: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
+  },
+  tagChipText: {
+    color: Colors.textDim,
+    fontSize: 12,
+    fontFamily: 'DMSans_500Medium',
+  },
+  tagChipTextActive: {
+    color: Colors.bg,
+    fontFamily: 'DMSans_700Bold',
   },
 });

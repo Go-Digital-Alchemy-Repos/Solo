@@ -10,7 +10,6 @@ import Colors from '@/constants/colors';
 import SoloHeader from '@/components/SoloHeader';
 import WaveformTrimmer from '@/components/WaveformTrimmer';
 import Teleprompter from '@/components/Teleprompter';
-import VibeSelector from '@/components/VibeSelector';
 import { useData } from '@/lib/data-context';
 
 const MAX_DURATION_MS = 300000;
@@ -108,7 +107,6 @@ export default function RecordScreen() {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
-  const [selectedVibe, setSelectedVibe] = useState<string | null>(null);
   const [segmentCount, setSegmentCount] = useState(1);
   const [segmentMarkers, setSegmentMarkers] = useState<number[]>([]);
   const [isPosting, setIsPosting] = useState(false);
@@ -155,7 +153,6 @@ export default function RecordScreen() {
     setRecordedUri(null);
     setRecordingDuration(0);
     setPhase('idle');
-    setSelectedVibe(null);
     setSegmentCount(1);
     setSegmentMarkers([]);
     setIsPosting(false);
@@ -272,7 +269,7 @@ export default function RecordScreen() {
     resetAll();
   }, [resetAll]);
 
-  const handlePost = useCallback(async (title: string, trimStartMs: number, trimEndMs: number, tags: string[]) => {
+  const handlePost = useCallback(async (title: string, trimStartMs: number, trimEndMs: number, tags: string[], vibeId: string | null) => {
     if (!recordedUri) return;
     const effectiveDuration = trimEndMs - trimStartMs;
     if (effectiveDuration < MIN_DURATION_MS) {
@@ -290,7 +287,7 @@ export default function RecordScreen() {
         durationMs: effectiveDuration,
         trimStartMs,
         trimEndMs,
-        vibeId: selectedVibe || undefined,
+        vibeId: vibeId || undefined,
         tags: tags.length > 0 ? tags : undefined,
       });
       if (Platform.OS !== 'web') {
@@ -304,7 +301,7 @@ export default function RecordScreen() {
       setIsPosting(false);
       Alert.alert('Upload Failed', 'Could not upload your recording. Please try again.');
     }
-  }, [recordedUri, selectedVibe, uploadAndPost, resetAll]);
+  }, [recordedUri, uploadAndPost, resetAll]);
 
   const handleEditCancel = useCallback(() => {
     resetAll();
@@ -374,11 +371,6 @@ export default function RecordScreen() {
           <Teleprompter
             isRecording={phase === 'recording'}
             isPaused={phase === 'paused'}
-          />
-          <VibeSelector
-            selectedVibe={selectedVibe}
-            onSelect={setSelectedVibe}
-            isRecording={isActiveRecording}
           />
         </View>
 
