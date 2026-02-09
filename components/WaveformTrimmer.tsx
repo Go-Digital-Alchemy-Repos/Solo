@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { StyleSheet, View, Text, Pressable, Platform, PanResponder, LayoutChangeEvent, TextInput, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Platform, PanResponder, LayoutChangeEvent, TextInput, ScrollView, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -407,10 +407,14 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
         <Pressable
           onPress={handlePost}
           style={[styles.postBtn, !canPost && styles.postBtnDisabled]}
-          disabled={!canPost}
+          disabled={!canPost || isPosting}
           hitSlop={16}
         >
-          <Text style={[styles.postBtnText, !canPost && styles.postBtnTextDisabled]}>Post</Text>
+          {isPosting ? (
+            <ActivityIndicator size="small" color={Colors.bg} />
+          ) : (
+            <Text style={[styles.postBtnText, !canPost && styles.postBtnTextDisabled]}>Post</Text>
+          )}
         </Pressable>
       </View>
 
