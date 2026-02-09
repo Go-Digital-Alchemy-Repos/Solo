@@ -278,7 +278,6 @@ export default function RecordScreen() {
     }
 
     setIsPosting(true);
-    setPhase('processing');
 
     try {
       await uploadAndPost({
@@ -295,9 +294,8 @@ export default function RecordScreen() {
       }
       resetAll();
       router.replace('/(tabs)/');
-    } catch (e) {
-      console.error('Failed to upload:', e);
-      setPhase('editing');
+    } catch (e: any) {
+      console.error('Failed to upload:', e?.message || e, e?.stack);
       setIsPosting(false);
       Alert.alert('Upload Failed', 'Could not upload your recording. Please try again.');
     }

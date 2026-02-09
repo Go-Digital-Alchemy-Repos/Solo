@@ -224,9 +224,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const formData = new FormData();
 
       if (Platform.OS === 'web') {
-        const response = await globalThis.fetch(params.audioUri);
-        const blob = await response.blob();
-        formData.append('audio', blob, 'recording.m4a');
+        try {
+          const response = await globalThis.fetch(params.audioUri);
+          const blob = await response.blob();
+          formData.append('audio', new globalThis.File([blob], 'recording.m4a', { type: 'audio/mp4' }));
+        } catch (blobErr: any) {
+          console.error('Failed to read recording blob:', blobErr?.message);
+          throw new Error('Could not read recorded audio. Please try recording again.');
+        }
       } else {
         const { File } = await import('expo-file-system');
         const file = new File(params.audioUri);
@@ -246,8 +251,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
         formData.append('vibeId', params.vibeId);
       }
 
-      const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
-
       const headers: Record<string, string> = {};
       if (Platform.OS !== 'web') {
         const sessionCookie = await AsyncStorage.getItem('solo_auth_session');
@@ -256,7 +259,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      const res = await fetchFn(new URL('/api/solos', baseUrl).toString(), {
+      const uploadUrl = new URL('/api/solos', baseUrl).toString();
+      console.log('Uploading to:', uploadUrl);
+
+      const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
+
+      const res = await fetchFn(uploadUrl, {
         method: 'POST',
         body: formData,
         headers,
@@ -265,6 +273,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       if (!res.ok) {
         const errorText = await res.text();
+        console.error('Upload response error:', res.status, errorText);
         throw new Error(`Upload failed: ${errorText}`);
       }
 

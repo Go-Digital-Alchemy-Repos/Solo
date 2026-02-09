@@ -46,12 +46,16 @@ async function authFetch(path: string, options: RequestInit = {}): Promise<Respo
   } as any);
 }
 
-async function saveCookies(response: Response) {
-  const setCookie = response.headers.get('set-cookie');
-  if (setCookie) {
-    const match = setCookie.match(/connect\.sid=[^;]+/);
-    if (match) {
-      await AsyncStorage.setItem(AUTH_TOKEN_KEY, match[0]);
+async function saveSessionFromBody(data: any) {
+  if (data?.sessionCookie) {
+    await AsyncStorage.setItem(AUTH_TOKEN_KEY, data.sessionCookie);
+  } else {
+    const setCookie = data?.headers?.get?.('set-cookie');
+    if (setCookie) {
+      const match = setCookie.match(/connect\.sid=[^;]+/);
+      if (match) {
+        await AsyncStorage.setItem(AUTH_TOKEN_KEY, match[0]);
+      }
     }
   }
 }
@@ -87,12 +91,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
+    const data = await res.json();
     if (!res.ok) {
-      const data = await res.json();
       throw new Error(data.error || 'Signup failed');
     }
-    await saveCookies(res);
-    const data = await res.json();
+    await saveSessionFromBody(data);
     setUser(data);
   }, []);
 
@@ -102,12 +105,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
+    const data = await res.json();
     if (!res.ok) {
-      const data = await res.json();
       throw new Error(data.error || 'Login failed');
     }
-    await saveCookies(res);
-    const data = await res.json();
+    await saveSessionFromBody(data);
     setUser(data);
   }, []);
 

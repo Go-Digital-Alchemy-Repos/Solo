@@ -14,6 +14,7 @@ import { toFile } from "openai";
 import { spawn } from "child_process";
 import { tmpdir } from "os";
 import { writeFile, unlink, readFile } from "fs/promises";
+import cookieSignature from "cookie-signature";
 
 declare module "express-session" {
   interface SessionData {
@@ -40,6 +41,12 @@ async function requireAuth(req: Request, res: Response): Promise<string | null> 
     return null;
   }
   return userId;
+}
+
+function getSessionCookie(req: Request): string {
+  const secret = process.env.SESSION_SECRET || "solo-secret-fallback";
+  const signed = cookieSignature.sign(req.sessionID, secret);
+  return `connect.sid=s%3A${encodeURIComponent(signed).replace(/%3A/g, ':')}`;
 }
 
 async function generateTranscript(soloId: string, audioFilePath: string, durationMs: number): Promise<Transcript | null> {
@@ -175,12 +182,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).returning();
 
       req.session.userId = user.id;
-      return res.status(201).json({
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        avatarUrl: user.avatarUrl,
-        bio: user.bio,
+      req.session.save(() => {
+        return res.status(201).json({
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          avatarUrl: user.avatarUrl,
+          bio: user.bio,
+          sessionCookie: getSessionCookie(req),
+        });
       });
     } catch (error) {
       console.error("Signup error:", error);
@@ -207,12 +217,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       req.session.userId = user.id;
-      return res.json({
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        avatarUrl: user.avatarUrl,
-        bio: user.bio,
+      req.session.save(() => {
+        return res.json({
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          avatarUrl: user.avatarUrl,
+          bio: user.bio,
+          sessionCookie: getSessionCookie(req),
+        });
       });
     } catch (error) {
       console.error("Login error:", error);
