@@ -10,6 +10,7 @@ import adminRoutes from "./features/admin/admin.routes";
 import { streamAudio, audioOptions } from "./features/solos/solos.controller";
 import { serveAvatar } from "./features/auth/auth.controller";
 import { logger } from "./lib/logger";
+import { eventLogger } from "./lib/eventLogger";
 
 declare module "express-session" {
   interface SessionData {
@@ -53,6 +54,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     logger.warn(`Client error: ${entry.message}`, {
       error: entry.stack?.split("\n")[0],
+    });
+
+    eventLogger.error("client", "client_error", entry.message, {
+      platform: entry.platform,
+      stack: entry.stack,
+      screen,
+      componentStack: componentStack ? String(componentStack).slice(0, 500) : undefined,
+    }, {
+      requestId: req.requestId,
+      userId: req.session?.userId,
     });
 
     return res.json({ ok: true });

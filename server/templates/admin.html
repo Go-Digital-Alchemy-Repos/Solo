@@ -1267,6 +1267,7 @@
       <button class="tab-btn" data-tab="users">App Users</button>
       <button class="tab-btn" data-tab="docs">App Docs</button>
       <button class="tab-btn" data-tab="integrations">System Integrations</button>
+      <button class="tab-btn" data-tab="system-status">System Status</button>
     </div>
 
     <!-- Reports Tab -->
@@ -1595,6 +1596,106 @@
     </div>
   </div>
 
+    <!-- System Status Tab -->
+    <div class="tab-content" id="tab-system-status">
+      <div id="systemStatusLoading" class="loading"><div class="spinner"></div></div>
+      <div id="systemStatusContent" style="display:none;">
+
+        <!-- Health Dashboard -->
+        <div class="section-header">
+          <h2 class="section-title">Health Dashboard</h2>
+          <div class="btn-group">
+            <button class="btn btn-outline btn-sm" onclick="testTranscription()">Test Transcription</button>
+            <button class="btn btn-outline btn-sm" onclick="loadHealthData()">Refresh</button>
+          </div>
+        </div>
+        <div id="transcriptionTestResult" style="margin-bottom:12px;display:none;"></div>
+        <div class="stats-grid" id="healthGrid" style="margin-bottom:32px;"></div>
+
+        <!-- Events & Debugging -->
+        <div class="section-header">
+          <h2 class="section-title">Events &amp; Debugging</h2>
+          <div style="display:flex;align-items:center;gap:16px;">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim);cursor:pointer;">
+              Verbose Logging
+              <label class="intg-toggle">
+                <input type="checkbox" id="verboseLoggingToggle" onchange="toggleVerboseLogging()">
+                <span class="intg-toggle-slider"></span>
+              </label>
+            </label>
+          </div>
+        </div>
+
+        <!-- Event Filters -->
+        <div class="search-bar" style="gap:8px;flex-wrap:wrap;">
+          <select class="form-input" id="eventLevelFilter" onchange="loadEvents()" style="flex:0 0 140px;">
+            <option value="">All Levels</option>
+            <option value="error">Error</option>
+            <option value="warn">Warning</option>
+            <option value="info">Info</option>
+          </select>
+          <select class="form-input" id="eventResolvedFilter" onchange="loadEvents()" style="flex:0 0 160px;">
+            <option value="false">Unresolved</option>
+            <option value="true">Resolved</option>
+            <option value="">All</option>
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="loadEvents()">Refresh Events</button>
+          <div id="eventSummary" style="display:flex;gap:8px;align-items:center;margin-left:auto;"></div>
+        </div>
+
+        <!-- Events Table -->
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Level</th>
+                <th>Source</th>
+                <th>Type</th>
+                <th>Message</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="eventsTableBody">
+              <tr><td colspan="6" class="empty-state">Loading events...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Request Logs -->
+        <div class="section-header" style="margin-top:16px;">
+          <h2 class="section-title">Request Logs</h2>
+        </div>
+        <div class="search-bar" style="gap:8px;flex-wrap:wrap;">
+          <select class="form-input" id="reqLogStatusFilter" onchange="loadRequestLogs()" style="flex:0 0 160px;">
+            <option value="0">All Statuses</option>
+            <option value="400">4xx+ Errors</option>
+            <option value="500">5xx+ Errors</option>
+          </select>
+          <input type="text" class="search-input" id="reqLogPathFilter" placeholder="Filter by path..." onkeyup="if(event.key==='Enter')loadRequestLogs()" style="flex:0 1 240px;">
+          <button class="btn btn-outline btn-sm" onclick="loadRequestLogs()">Refresh Logs</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Method</th>
+                <th>Path</th>
+                <th>Status</th>
+                <th>Duration</th>
+                <th>Request ID</th>
+              </tr>
+            </thead>
+            <tbody id="requestLogsTableBody">
+              <tr><td colspan="6" class="empty-state">Loading request logs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+
   <!-- Edit User Modal -->
   <div class="modal-overlay" id="editUserModal">
     <div class="modal">
@@ -1738,6 +1839,7 @@
         if (tab === 'users') loadUsers();
         if (tab === 'docs') loadDocsTab();
         if (tab === 'integrations') loadIntegrations();
+        if (tab === 'system-status') loadSystemStatus();
       });
     });
 
@@ -2514,6 +2616,192 @@
       }
 
       setTimeout(() => { resultEl.textContent = ''; resultEl.className = 'intg-test-result'; }, 6000);
+    }
+
+    // System Status
+    async function loadSystemStatus() {
+      document.getElementById('systemStatusLoading').style.display = 'block';
+      document.getElementById('systemStatusContent').style.display = 'none';
+      await Promise.all([loadHealthData(), loadEvents(), loadRequestLogs(), loadVerboseLoggingState()]);
+      document.getElementById('systemStatusLoading').style.display = 'none';
+      document.getElementById('systemStatusContent').style.display = 'block';
+    }
+
+    async function loadHealthData() {
+      try {
+        const res = await api('/api/admin/system-status/health');
+        const json = await res.json();
+        if (!json.ok) return;
+        const d = json.data;
+        const cards = [
+          { name: 'Server', ok: d.server?.ok, details: `Uptime: ${formatUptime(d.server?.uptimeSeconds)}<br>Node ${d.server?.nodeVersion || '?'}<br>Env: ${d.server?.env || '?'}` },
+          { name: 'Database', ok: d.db?.ok, details: `Latency: ${d.db?.latencyMs ?? '?'}ms` },
+          { name: 'Sessions', ok: d.sessions?.ok, details: `Active: ${d.sessions?.activeSessions ?? '?'}` },
+          { name: 'Storage', ok: d.storage?.ok, details: `Solos: ${d.storage?.solosDir ? 'OK' : 'Missing'}<br>Avatars: ${d.storage?.avatarsDir ? 'OK' : 'Missing'}` },
+          { name: 'FFmpeg', ok: d.ffmpeg?.ok, details: `${d.ffmpeg?.version || 'Not found'}` },
+          { name: 'Transcription', ok: d.transcription?.ok, details: `Model: ${d.transcription?.model || '?'}<br>API Key: ${d.transcription?.apiKeyConfigured ? 'Configured' : 'Missing'}` },
+        ];
+        document.getElementById('healthGrid').innerHTML = cards.map(c => `
+          <div class="stat-card" style="border-color:${c.ok ? 'rgba(52,199,89,0.3)' : 'rgba(255,68,68,0.3)'};">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:${c.ok ? 'rgba(52,199,89,0.15)' : 'rgba(255,68,68,0.15)'};color:${c.ok ? 'var(--success)' : 'var(--danger)'};font-weight:700;font-size:14px;">${c.ok ? '✓' : '✗'}</span>
+              <span class="stat-label" style="margin-bottom:0;font-size:14px;font-weight:600;color:var(--text);">${c.name}</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-dim);line-height:1.6;">${c.details}</div>
+          </div>
+        `).join('');
+      } catch (err) {
+        document.getElementById('healthGrid').innerHTML = '<div class="empty-state">Failed to load health data</div>';
+      }
+    }
+
+    function formatUptime(seconds) {
+      if (!seconds) return '?';
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = Math.floor(seconds % 60);
+      return h > 0 ? `${h}h ${m}m ${s}s` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+    }
+
+    async function loadEvents() {
+      const level = document.getElementById('eventLevelFilter').value;
+      const resolved = document.getElementById('eventResolvedFilter').value;
+      const params = new URLSearchParams({ limit: '50' });
+      if (level) params.set('level', level);
+      if (resolved) params.set('resolved', resolved);
+
+      try {
+        const res = await api('/api/admin/system-status/events?' + params.toString());
+        const json = await res.json();
+        if (!json.ok) return;
+        const { events, summary } = json.data;
+
+        const summaryEl = document.getElementById('eventSummary');
+        if (summary) {
+          summaryEl.innerHTML = [
+            summary.error ? `<span class="badge" style="background:var(--danger-dim);color:var(--danger);border:1px solid rgba(255,68,68,0.3);">${summary.error} errors</span>` : '',
+            summary.warn ? `<span class="badge" style="background:rgba(255,149,0,0.15);color:#FF9500;border:1px solid rgba(255,149,0,0.3);">${summary.warn} warnings</span>` : '',
+            summary.info ? `<span class="badge" style="background:rgba(52,199,89,0.15);color:var(--success);border:1px solid rgba(52,199,89,0.3);">${summary.info} info</span>` : '',
+          ].join('');
+        }
+
+        const tbody = document.getElementById('eventsTableBody');
+        if (!events || events.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No events found</td></tr>';
+          return;
+        }
+        tbody.innerHTML = events.map(ev => {
+          const levelColors = { error: 'var(--danger)', warn: '#FF9500', info: 'var(--success)' };
+          const levelBgs = { error: 'var(--danger-dim)', warn: 'rgba(255,149,0,0.15)', info: 'rgba(52,199,89,0.15)' };
+          const color = levelColors[ev.level] || 'var(--text-dim)';
+          const bg = levelBgs[ev.level] || 'transparent';
+          const time = ev.createdAt ? new Date(ev.createdAt).toLocaleString() : '?';
+          const actions = ev.resolvedAt
+            ? '<span style="font-size:11px;color:var(--text-muted);">Resolved</span>'
+            : `<button class="btn btn-outline btn-sm" onclick="resolveEvent('${ev.id}')">Resolve</button>`;
+          return `<tr>
+            <td style="white-space:nowrap;font-size:12px;">${time}</td>
+            <td><span class="badge" style="background:${bg};color:${color};border:1px solid ${color}30;">${ev.level}</span></td>
+            <td>${ev.source || ''}</td>
+            <td>${ev.type || ''}</td>
+            <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(ev.message || '').replace(/"/g, '&quot;')}">${ev.message || ''}</td>
+            <td>${actions}</td>
+          </tr>`;
+        }).join('');
+      } catch (err) {
+        document.getElementById('eventsTableBody').innerHTML = '<tr><td colspan="6" class="empty-state">Failed to load events</td></tr>';
+      }
+    }
+
+    async function resolveEvent(eventId) {
+      const note = prompt('Resolution note (optional):');
+      if (note === null) return;
+      try {
+        await api('/api/admin/system-status/events/' + eventId + '/resolve', {
+          method: 'POST',
+          body: JSON.stringify({ resolutionNote: note || '' }),
+        });
+        loadEvents();
+      } catch (err) {
+        alert('Failed to resolve event');
+      }
+    }
+
+    async function loadRequestLogs() {
+      const minStatus = document.getElementById('reqLogStatusFilter').value;
+      const pathFilter = document.getElementById('reqLogPathFilter').value;
+      const params = new URLSearchParams({ limit: '50' });
+      if (minStatus && minStatus !== '0') params.set('minStatus', minStatus);
+      if (pathFilter) params.set('path', pathFilter);
+
+      try {
+        const res = await api('/api/admin/system-status/request-logs?' + params.toString());
+        const json = await res.json();
+        if (!json.ok) return;
+        const { logs } = json.data;
+
+        const tbody = document.getElementById('requestLogsTableBody');
+        if (!logs || logs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No request logs found</td></tr>';
+          return;
+        }
+        tbody.innerHTML = logs.map(log => {
+          const time = log.createdAt ? new Date(log.createdAt).toLocaleString() : '?';
+          const status = log.status || 0;
+          const statusColor = status >= 500 ? 'var(--danger)' : status >= 400 ? '#FF9500' : status >= 300 ? 'var(--accent)' : 'var(--success)';
+          return `<tr>
+            <td style="white-space:nowrap;font-size:12px;">${time}</td>
+            <td><span class="badge badge-user">${log.method || ''}</span></td>
+            <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(log.path || '').replace(/"/g, '&quot;')}">${log.path || ''}</td>
+            <td><span style="color:${statusColor};font-weight:600;">${status}</span></td>
+            <td>${log.durationMs != null ? log.durationMs + 'ms' : '?'}</td>
+            <td style="font-size:11px;color:var(--text-muted);font-family:monospace;">${log.requestId || ''}</td>
+          </tr>`;
+        }).join('');
+      } catch (err) {
+        document.getElementById('requestLogsTableBody').innerHTML = '<tr><td colspan="6" class="empty-state">Failed to load request logs</td></tr>';
+      }
+    }
+
+    async function testTranscription() {
+      const el = document.getElementById('transcriptionTestResult');
+      el.style.display = 'block';
+      el.innerHTML = '<span class="intg-test-result loading">Testing transcription...</span>';
+      try {
+        const res = await api('/api/admin/system-status/transcription/test', { method: 'POST' });
+        const json = await res.json();
+        if (json.ok && json.data.success) {
+          el.innerHTML = '<span class="intg-test-result success">Transcription service is working</span>';
+        } else {
+          el.innerHTML = '<span class="intg-test-result error">Transcription failed: ' + (json.data?.error || 'Unknown error') + '</span>';
+        }
+      } catch (err) {
+        el.innerHTML = '<span class="intg-test-result error">Test request failed</span>';
+      }
+      setTimeout(() => { el.style.display = 'none'; }, 8000);
+    }
+
+    async function loadVerboseLoggingState() {
+      try {
+        const res = await api('/api/admin/system-status/verbose-logging');
+        const json = await res.json();
+        if (json.ok) {
+          document.getElementById('verboseLoggingToggle').checked = json.data.enabled;
+        }
+      } catch (err) {}
+    }
+
+    async function toggleVerboseLogging() {
+      const enabled = document.getElementById('verboseLoggingToggle').checked;
+      try {
+        await api('/api/admin/system-status/verbose-logging', {
+          method: 'POST',
+          body: JSON.stringify({ enabled }),
+        });
+      } catch (err) {
+        document.getElementById('verboseLoggingToggle').checked = !enabled;
+        alert('Failed to toggle verbose logging');
+      }
     }
 
     // Init
