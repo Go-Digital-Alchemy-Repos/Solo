@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
-import { getApiUrl } from './query-client';
+import { authFetch, saveSessionFromResponse, extractErrorMessage } from './auth-fetch';
+import { clearSessionCookie } from './secure-session';
 
 export interface AuthUser {
   id: string;
@@ -9,6 +8,8 @@ export interface AuthUser {
   username: string | null;
   avatarUrl: string | null;
   bio: string | null;
+  isAdmin?: boolean;
+  createdAt?: string;
 }
 
 interface AuthContextValue {
@@ -20,53 +21,14 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (user: AuthUser) => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const AUTH_TOKEN_KEY = 'solo_auth_session';
-
-async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const baseUrl = getApiUrl();
-  const url = new URL(path, baseUrl).toString();
-
-  const sessionCookie = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
-  const headers: Record<string, string> = {
-    ...(options.headers as Record<string, string> || {}),
-  };
-  if (sessionCookie) {
-    headers['Cookie'] = sessionCookie;
-  }
-
-  const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
-  return fetchFn(url, {
-    ...options,
-    headers,
-    credentials: 'include' as RequestCredentials,
-  } as any);
-}
-
-async function saveSessionFromBody(data: any) {
-  if (data?.sessionCookie) {
-    await AsyncStorage.setItem(AUTH_TOKEN_KEY, data.sessionCookie);
-  } else {
-    const setCookie = data?.headers?.get?.('set-cookie');
-    if (setCookie) {
-      const match = setCookie.match(/connect\.sid=[^;]+/);
-      if (match) {
-        await AsyncStorage.setItem(AUTH_TOKEN_KEY, match[0]);
-      }
-    }
-  }
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    checkAuth();
-  }, []);
 
   const checkAuth = useCallback(async () => {
     try {
@@ -76,13 +38,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data);
       } else {
         setUser(null);
-        await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+        await clearSessionCookie();
       }
     } catch {
       setUser(null);
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    checkAuth();
   }, []);
 
   const signup = useCallback(async (email: string, password: string) => {
@@ -93,9 +59,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.error || 'Signup failed');
+      throw new Error(extractErrorMessage(data, 'Signup failed'));
     }
-    await saveSessionFromBody(data);
+    await saveSessionFromResponse(data);
     setUser(data);
   }, []);
 
@@ -107,9 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.error || 'Login failed');
+      throw new Error(extractErrorMessage(data, 'Login failed'));
     }
-    await saveSessionFromBody(data);
+    await saveSessionFromResponse(data);
     setUser(data);
   }, []);
 
@@ -117,12 +83,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await authFetch('/api/auth/logout', { method: 'POST' });
     } catch {}
-    await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+    await clearSessionCookie();
     setUser(null);
   }, []);
 
   const updateUser = useCallback((updated: AuthUser) => {
     setUser(updated);
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/auth/me');
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data);
+      }
+    } catch {}
   }, []);
 
   const value = useMemo(() => ({
@@ -134,7 +110,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     updateUser,
-  }), [user, isLoading, signup, login, logout, updateUser]);
+    refreshUser,
+  }), [user, isLoading, signup, login, logout, updateUser, refreshUser]);
 
   return (
     <AuthContext.Provider value={value}>

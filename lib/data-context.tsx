@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getApiUrl } from './query-client';
 import { Platform } from 'react-native';
 import { useAuth } from './auth-context';
+import { authFetch } from './auth-fetch';
 
 export interface UserProfile {
   id: string;
@@ -262,26 +263,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
         formData.append('vibeId', params.vibeId);
       }
 
-      const headers: Record<string, string> = {};
-      const sessionCookie = await AsyncStorage.getItem('solo_auth_session');
-      if (sessionCookie) {
-        headers['X-Session-Token'] = sessionCookie;
-        if (Platform.OS !== 'web') {
-          headers['Cookie'] = sessionCookie;
-        }
-      }
-
-      const uploadUrl = new URL('/api/solos', baseUrl).toString();
+      const uploadUrl = '/api/solos';
       console.log('Uploading to:', uploadUrl);
 
-      const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
-
-      const res = await fetchFn(uploadUrl, {
+      const res = await authFetch(uploadUrl, {
         method: 'POST',
         body: formData,
-        headers,
-        credentials: 'include',
-      } as any);
+      });
 
       if (!res.ok) {
         const errorText = await res.text();
@@ -297,19 +285,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const pollSoloStatus = useCallback(async (soloId: string): Promise<SoloStatusResponse> => {
-    const baseUrl = getApiUrl();
-    const headers: Record<string, string> = {};
-    const sessionCookie = await AsyncStorage.getItem('solo_auth_session');
-    if (sessionCookie) {
-      headers['X-Session-Token'] = sessionCookie;
-      if (Platform.OS !== 'web') {
-        headers['Cookie'] = sessionCookie;
-      }
-    }
-
-    const url = new URL(`/api/solos/${soloId}/status`, baseUrl).toString();
-    const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
-    const res = await fetchFn(url, { headers, credentials: 'include' } as any);
+    const res = await authFetch(`/api/solos/${soloId}/status`);
     if (!res.ok) {
       throw new Error(`Status check failed: ${res.status}`);
     }
@@ -317,19 +293,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const retrySoloFn = useCallback(async (soloId: string): Promise<string> => {
-    const baseUrl = getApiUrl();
-    const headers: Record<string, string> = {};
-    const sessionCookie = await AsyncStorage.getItem('solo_auth_session');
-    if (sessionCookie) {
-      headers['X-Session-Token'] = sessionCookie;
-      if (Platform.OS !== 'web') {
-        headers['Cookie'] = sessionCookie;
-      }
-    }
-
-    const url = new URL(`/api/solos/${soloId}/retry`, baseUrl).toString();
-    const fetchFn = Platform.OS === 'web' ? globalThis.fetch : (await import('expo/fetch')).fetch;
-    const res = await fetchFn(url, { method: 'POST', headers, credentials: 'include' } as any);
+    const res = await authFetch(`/api/solos/${soloId}/retry`, { method: 'POST' });
     if (!res.ok) {
       const errorText = await res.text();
       throw new Error(`Retry failed: ${errorText}`);

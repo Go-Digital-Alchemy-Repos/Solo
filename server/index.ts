@@ -237,21 +237,29 @@ function setupSession(app: express.Application) {
 
   app.set("trust proxy", 1);
 
+  const isProd = process.env.NODE_ENV === "production" ||
+    !!process.env.REPLIT_DEPLOYMENT ||
+    !!process.env.REPLIT_DOMAINS;
+
   app.use(
     session({
       store: new PgStore({
         pool,
         createTableIfMissing: true,
         tableName: "session",
+        pruneSessionInterval: 60 * 15,
       }),
+      name: "connect.sid",
       secret: process.env.SESSION_SECRET || "solo-secret-fallback",
       resave: false,
       saveUninitialized: false,
+      rolling: true,
       cookie: {
         maxAge: 30 * 24 * 60 * 60 * 1000,
         httpOnly: true,
         secure: true,
         sameSite: "none",
+        path: "/",
       },
     }),
   );

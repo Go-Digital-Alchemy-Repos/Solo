@@ -77,14 +77,12 @@ export function logout(req: Request, res: Response) {
 }
 
 export async function me(req: Request, res: Response) {
-  const userId = req.session?.userId;
-  if (!userId) {
-    throw AppError.unauthorized();
-  }
+  const userId = await requireAuth(req, res);
+  if (!userId) return;
 
   const user = await authService.findUserById(userId);
   if (!user) {
-    req.session.destroy(() => {});
+    req.session?.destroy(() => {});
     throw AppError.unauthorized("User not found");
   }
   return res.json({
@@ -93,6 +91,8 @@ export async function me(req: Request, res: Response) {
     username: user.username,
     avatarUrl: user.avatarUrl,
     bio: user.bio,
+    isAdmin: user.isAdmin ?? false,
+    createdAt: user.createdAt,
   });
 }
 
