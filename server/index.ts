@@ -4,6 +4,8 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import pg from "pg";
 import bcrypt from "bcryptjs";
+import { toNodeHandler } from "better-auth/node";
+import { auth } from "./auth";
 import { registerRoutes } from "./routes";
 import { db } from "./db";
 import { users } from "@shared/schema";
@@ -288,12 +290,13 @@ async function ensureAdminAccount() {
         username: "blurryguy",
         bio: "Admin",
         isAdmin: true,
+        role: "admin",
       });
       log(`Admin account created for ${adminEmail}`);
     } else if (!existing.isAdmin) {
       await db
         .update(users)
-        .set({ isAdmin: true })
+        .set({ isAdmin: true, role: "admin" })
         .where(eq(users.id, existing.id));
       log(`Admin flag set for ${adminEmail}`);
     } else {
@@ -306,6 +309,7 @@ async function ensureAdminAccount() {
 
 (async () => {
   setupCors(app);
+  app.all("/api/better-auth/*splat", toNodeHandler(auth));
   setupBodyParsing(app);
   setupSession(app);
   setupRequestLogging(app);
