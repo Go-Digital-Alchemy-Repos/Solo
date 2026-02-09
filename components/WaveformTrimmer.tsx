@@ -94,6 +94,7 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
 
   const soundRef = useRef<Audio.Sound | null>(null);
   const vibeSoundRef = useRef<Audio.Sound | null>(null);
+  const vibePreviewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastHapticRef = useRef(0);
   const startFracOnGrant = useRef(0);
@@ -140,7 +141,7 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
       const baseUrl = getApiUrl();
       const { sound } = await Audio.Sound.createAsync(
         { uri: `${baseUrl}api/vibes/${vibeId}/audio` },
-        { shouldPlay: true, isLooping: true, volume: 0.1 }
+        { shouldPlay: true, isLooping: true, volume: 0.15 }
       );
       vibeSoundRef.current = sound;
     } catch (e) {
@@ -187,6 +188,10 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
   const seekToPosition = useCallback(async (posMs: number) => {
     try {
       if (!soundRef.current) {
+        if (vibePreviewTimeoutRef.current) {
+          clearTimeout(vibePreviewTimeoutRef.current);
+          vibePreviewTimeoutRef.current = null;
+        }
         const { sound } = await Audio.Sound.createAsync(
           { uri: audioUri },
           { positionMillis: Math.round(posMs), shouldPlay: true }
@@ -217,6 +222,10 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
       await cleanupPlayback();
       return;
     }
+    if (vibePreviewTimeoutRef.current) {
+      clearTimeout(vibePreviewTimeoutRef.current);
+      vibePreviewTimeoutRef.current = null;
+    }
     try {
       const { sound } = await Audio.Sound.createAsync(
         { uri: audioUri },
@@ -236,6 +245,7 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
 
   useEffect(() => {
     return () => {
+      if (vibePreviewTimeoutRef.current) clearTimeout(vibePreviewTimeoutRef.current);
       if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
       if (soundRef.current) {
         soundRef.current.stopAsync().catch(() => {});
@@ -342,6 +352,10 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+    if (vibePreviewTimeoutRef.current) {
+      clearTimeout(vibePreviewTimeoutRef.current);
+      vibePreviewTimeoutRef.current = null;
+    }
     if (vibeId === null || selectedVibe === vibeId) {
       setSelectedVibe(null);
       await stopVibePlayback();
@@ -351,7 +365,10 @@ export default function WaveformTrimmer({ audioUri, durationMs, onCancel, onPost
         await startVibePlayback(vibeId);
       } else {
         await startVibePlayback(vibeId);
-        setTimeout(() => stopVibePlayback(), 3000);
+        vibePreviewTimeoutRef.current = setTimeout(() => {
+          stopVibePlayback();
+          vibePreviewTimeoutRef.current = null;
+        }, 3000);
       }
     }
   }, [selectedVibe, isPlaying, startVibePlayback, stopVibePlayback]);
