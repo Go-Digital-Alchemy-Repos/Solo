@@ -1,0 +1,113 @@
+Routes & App Organization
+
+
+NON-DESTRUCTIVE REFACTOR REQUEST
+
+Do NOT remove or break existing functionality.
+Do NOT change database schemas.
+Do NOT rename environment variables.
+Do NOT modify business logic unless required for modularization.
+
+Your task is to reorganize the server architecture to improve:
+- developer readability
+- long-term maintainability
+- debugging and troubleshooting
+- performance clarity
+- feature isolation
+- scalability
+
+GOAL
+Refactor the application to use feature-based modular organization,
+with routes grouped by database table or feature domain.
+
+If folders already exist, reorganize without overwriting working logic.
+
+ROUTE ORGANIZATION RULES
+
+Each feature must contain:
+
+routes file
+- defines endpoints only
+- uses Express Router
+- no business logic
+
+controller file
+- request/response handling
+- calls service layer
+
+service file
+- database queries
+- business logic
+- reusable functions
+
+validation file (optional)
+- zod or existing validation patterns
+
+Example:
+
+clients.routes.ts
+clients.controller.ts
+clients.service.ts
+
+APP ENTRY FILE
+
+Update server/index.ts so that it mounts routes like:
+
+app.use("/api/clients", clientsRoutes)
+app.use("/api/tasks", tasksRoutes)
+app.use("/api/projects", projectsRoutes)
+
+Avoid large monolithic route files.
+
+PERFORMANCE + ORGANIZATION IMPROVEMENTS
+
+Where safe to do so:
+
+- Remove duplicate imports
+- Remove unused middleware
+- Ensure async handlers use centralized error handling
+- Ensure database connection is initialized once
+- Confirm environment variables are loaded at startup
+- Confirm middleware order is correct
+- Ensure routers are lazy-loaded by feature
+
+ERROR HANDLING
+
+If not already present, create:
+
+middleware/errorHandler.ts
+
+Use centralized error middleware instead of inline try/catch everywhere.
+
+DOCUMENTATION
+
+Update Docs Library with:
+
+Docs Library → Architecture → Server Organization
+
+Include:
+- feature folder explanation
+- route/controller/service pattern
+- how to add new feature module
+- routing conventions
+
+SAFETY REQUIREMENTS
+
+Do not:
+- change API response formats
+- modify database models
+- change authentication behavior
+- break existing endpoints
+
+If unsure, wrap existing logic rather than rewriting it.
+
+SUCCESS CRITERIA
+
+The server should:
+- run exactly as before
+- be easier to navigate
+- have modular route files
+- have feature-based organization
+- support easier debugging and upgrades
+
+Focus on clarity, modularity, and developer experience.
