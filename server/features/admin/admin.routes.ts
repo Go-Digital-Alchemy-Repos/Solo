@@ -16,4 +16,8 @@ router.get("/docs/coverage", asyncHandler(adminController.docsCoverage));
 router.get("/docs/:docPath", asyncHandler(adminController.readDoc));
 router.post("/docs/sync", asyncHandler(adminController.syncDocs));
 
+router.get("/integrations", asyncHandler(adminController.getIntegrations));
+router.put("/integrations", asyncHandler(adminController.saveIntegration));
+router.post("/integrations/:service/test", asyncHandler(adminController.testIntegration));
+
 export default router;

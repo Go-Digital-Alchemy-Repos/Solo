@@ -93,6 +93,17 @@ export const solos = pgTable("solos", {
   transcript: jsonb("transcript"),
 });
 
+export const systemIntegrations = pgTable("system_integrations", {
+  id: serial("id").primaryKey(),
+  service: text("service").notNull().unique(),
+  config: jsonb("config").notNull().default({}),
+  enabled: boolean("enabled").notNull().default(false),
+  lastTestedAt: timestamp("last_tested_at"),
+  lastTestResult: text("last_test_result"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const conversations = pgTable("conversations", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),

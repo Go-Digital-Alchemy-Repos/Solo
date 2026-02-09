@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import * as adminService from "./admin.service";
+import * as integrationsService from "./integrations.service";
 import { requireAdmin } from "../../utils/auth-helpers";
 import { scanAllRoutes, createStubDocument, mergeContent, generateAutoSection } from "../../utils/routeScanner";
 import * as fs from "fs";
@@ -268,4 +269,42 @@ export async function syncDocs(req: Request, res: Response) {
   }
 
   return res.json({ success: true, summary, details });
+}
+
+export async function getIntegrations(req: Request, res: Response) {
+  const userId = await requireAdmin(req, res);
+  if (!userId) return;
+
+  const integrations = await integrationsService.getAllIntegrations();
+  return res.json(integrations);
+}
+
+export async function saveIntegration(req: Request, res: Response) {
+  const userId = await requireAdmin(req, res);
+  if (!userId) return;
+
+  const { service, config, enabled } = req.body;
+  const validServices: integrationsService.ServiceName[] = ["mailgun", "cloudflare_r2", "twilio"];
+
+  if (!validServices.includes(service)) {
+    return res.status(400).json({ error: "Invalid service name" });
+  }
+
+  const result = await integrationsService.saveIntegration(service, config, enabled ?? false);
+  return res.json({ success: true, integration: result });
+}
+
+export async function testIntegration(req: Request, res: Response) {
+  const userId = await requireAdmin(req, res);
+  if (!userId) return;
+
+  const { service } = req.params;
+  const validServices: integrationsService.ServiceName[] = ["mailgun", "cloudflare_r2", "twilio"];
+
+  if (!validServices.includes(service as integrationsService.ServiceName)) {
+    return res.status(400).json({ error: "Invalid service name" });
+  }
+
+  const result = await integrationsService.testIntegration(service as integrationsService.ServiceName);
+  return res.json(result);
 }
