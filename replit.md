@@ -2,7 +2,7 @@
 
 ## Overview
 
-Solo is an audio-focused social media application built with Expo (React Native) and an Express.js backend. Users can record audio posts, share them in a feed, discover other users and sounds, and interact through likes, comments, and follows. The app features a dark theme with gold accent colors, animated waveform visualizations, and audio playback controls. It includes full user authentication with email/password signup, login, session persistence, and a mandatory profile setup flow.
+Solo is an audio-focused social media application built with Expo (React Native) and an Express.js backend. Users can record audio posts, share them in a feed, discover other users and sounds, and interact through likes, comments, and follows. The app features a dark theme with gold accent colors, animated waveform visualizations, and audio playback controls. It includes full user authentication with email/password signup, login, session persistence, and a mandatory profile setup flow. It also includes a web-based admin portal at `/admin` for app administration.
 
 ## User Preferences
 
@@ -45,12 +45,14 @@ Preferred communication style: Simple, everyday language.
 - **File Uploads**: `multer` for avatar and audio file uploads, stored in `uploads/avatars/` and `uploads/audio/`
 - **CORS**: Dynamic CORS configuration supporting Replit dev/deployment domains and localhost origins
 - **Static Serving**: In production, serves the Expo web build from a `dist/` directory. In development, proxies to the Expo Metro bundler
+- **Admin Portal**: Web-based admin panel served at `/admin` (HTML in `server/templates/admin.html`). Routes defined in `server/admin-routes.ts` with `requireAdmin` middleware. Features: Reports dashboard (stats, trends, top contributors), App Users management (search, paginate, edit, delete), App Docs management (CRUD for documentation). Uses same session-based auth with `is_admin` flag on users table
 
 ### Database Schema (Drizzle ORM)
 - **ORM**: Drizzle ORM with PostgreSQL dialect
 - **Schema**: Defined in `shared/schema.ts`
-  - `users` table: `id` (UUID), `email` (unique), `password_hash`, `username` (unique, nullable), `avatar_url`, `bio`, `created_at`
+  - `users` table: `id` (UUID), `email` (unique), `password_hash`, `username` (unique, nullable), `avatar_url`, `bio`, `is_admin` (boolean, default false), `created_at`
   - `solos` table: `id` (UUID), `user_id`, `username`, `audio_url`, `timestamp`, `tags` (text array), `avatar_url`, `title`, `duration_ms`, `display_name`, `transcript` (JSONB, nullable)
+  - `app_docs` table: `id` (serial), `title`, `content`, `category`, `sort_order` (integer, default 0), `created_at`, `updated_at`
   - `session` table: managed by connect-pg-simple (not in Drizzle schema)
 - **Validation**: `drizzle-zod` generates Zod schemas from the Drizzle table definitions
 - **Migrations**: Managed via `drizzle-kit push` (use `--force` to avoid session table conflicts)
