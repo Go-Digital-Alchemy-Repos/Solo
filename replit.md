@@ -22,7 +22,7 @@ Preferred communication style: Simple, everyday language.
 - **Platform Support**: Supports iOS, Android, and Web, with platform-specific adjustments for safe areas, haptics, and keyboard behavior.
 
 ### Backend (Express.js)
-- **Server**: Express 5 on Node.js, structured with feature-based modules (auth, solos, vibes, admin, dm).
+- **Server**: Express 5 on Node.js, structured with feature-based modules (auth, solos, vibes, admin, dm, search).
 - **Shared Utilities**: Includes centralized error handling, authentication helpers, and file path constants.
 - **API Endpoints**: Comprehensive set of RESTful APIs for authentication, solo (audio post) management (CRUD, upload, processing status, retry), background vibes listing, admin functionalities, and direct messaging (conversations, messages, typing, presence, read receipts).
 - **Direct Messaging**: Feature module at `server/features/dm/` with routes (`dm.routes.ts`), service layer (`dm.service.ts`), and schema (`dm.schema.ts`). Supports 1:1 conversations, message CRUD, typing indicators, online presence, read receipts, and unread counts via polling.
@@ -33,13 +33,15 @@ Preferred communication style: Simple, everyday language.
 - **Admin Portal**: A web-based interface at `/admin` for reports, user management, documentation management, system integrations, processing job debugging, client error reporting, and system health monitoring.
 - **Logging & Tracing**: Structured logging with request IDs (X-Request-Id header) for correlation, client telemetry for error reporting, and persistent event/request logging to database.
 - **System Monitoring**: Health checks (DB, sessions, storage, FFmpeg, transcription), event logging with redaction, request audit trail, and admin-controlled verbose logging.
+- **Search**: Feature module at `server/features/search/` with full-text search (tsvector + GIN indexes) for solos and trigram similarity (pg_trgm) for users. Includes search indexing service that hooks into solo create/update/transcribe lifecycle. API routes: `/api/search/users`, `/api/search/solos`, `/api/search/suggestions`, `/api/search/trending`, `/api/search/backfill`.
+- **Caching**: Redis-ready in-memory cache at `server/lib/cache.ts` with TTL-based expiration and rate limiting. Designed for easy Redis swap-in when needed.
 
 ### Database Schema (Drizzle ORM)
 - **ORM**: Drizzle ORM with PostgreSQL.
 - **Schema**:
     - `users`: Stores user details, including `is_admin` and `role`.
     - `ba_user`, `ba_session`, `ba_account`, `ba_verification`: Tables for BetterAuth integration.
-    - `solos`: Stores audio post metadata, including processing status, transcript, and error information.
+    - `solos`: Stores audio post metadata, including processing status, transcript, error information, `searchText` (denormalized text for search), and `searchVector` (tsvector for full-text search with GIN index).
     - `app_docs`: Manages application documentation.
     - `system_integrations`: Stores configurations for external services.
     - `system_events`: Structured event log with level, source, redacted details, and resolution tracking.
