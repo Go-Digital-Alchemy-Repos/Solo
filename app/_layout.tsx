@@ -12,6 +12,7 @@ import { queryClient } from "@/lib/query-client";
 import { PlaybackProvider } from "@/lib/playback-provider";
 import { DataProvider } from "@/lib/data-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { DmProvider } from "@/lib/dm-context";
 import { ToastProvider } from "@/components/ui";
 
 SplashScreen.preventAutoHideAsync();
@@ -55,6 +56,7 @@ function RootLayoutNav() {
         <Stack.Screen name="auth" />
         <Stack.Screen name="profile-setup" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="messages" />
       </Stack>
     </>
   );
@@ -86,12 +88,14 @@ export default function RootLayout() {
             <KeyboardProvider>
               <AuthProvider>
                 <DataProvider>
-                  <PlaybackProvider>
-                    <ToastProvider>
-                      <StatusBar style="light" />
-                      <RootLayoutNav />
-                    </ToastProvider>
-                  </PlaybackProvider>
+                  <DmProvider>
+                    <PlaybackProvider>
+                      <ToastProvider>
+                        <StatusBar style="light" />
+                        <RootLayoutNav />
+                      </ToastProvider>
+                    </PlaybackProvider>
+                  </DmProvider>
                 </DataProvider>
               </AuthProvider>
             </KeyboardProvider>

@@ -3,10 +3,33 @@ import { Tabs } from "expo-router";
 import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View, Text as RNText } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import React from "react";
 import Colors from "@/constants/colors";
+import { useDm } from "@/lib/dm-context";
+
+function UnreadBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <View style={{
+      position: 'absolute',
+      top: -4,
+      right: -10,
+      backgroundColor: Colors.accent,
+      borderRadius: 10,
+      minWidth: 18,
+      height: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 4,
+    }}>
+      <RNText style={{ color: '#000', fontSize: 10, fontWeight: '700' as const }}>
+        {count > 99 ? '99+' : count}
+      </RNText>
+    </View>
+  );
+}
 
 function NativeTabLayout() {
   return (
@@ -23,6 +46,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "mic", selected: "mic.fill" }} />
         <Label>Record</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="inbox">
+        <Icon sf={{ default: "bubble.left", selected: "bubble.left.fill" }} />
+        <Label>Messages</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
         <Label>Profile</Label>
@@ -35,6 +62,11 @@ function ClassicTabLayout() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const isIOS = Platform.OS === "ios";
+  let totalUnread = 0;
+  try {
+    const dm = useDm();
+    totalUnread = dm.totalUnread;
+  } catch {}
 
   return (
     <Tabs
@@ -99,6 +131,23 @@ function ClassicTabLayout() {
               size={24}
               color={color}
             />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="inbox"
+        options={{
+          title: "Messages",
+          tabBarBadge: totalUnread > 0 ? totalUnread : undefined,
+          tabBarBadgeStyle: { backgroundColor: Colors.accent, color: '#000', fontSize: 10, fontWeight: '700' as const },
+          tabBarIcon: ({ color, focused }) => (
+            <View>
+              <Ionicons
+                name={focused ? "chatbubble" : "chatbubble-outline"}
+                size={24}
+                color={color}
+              />
+            </View>
           ),
         }}
       />

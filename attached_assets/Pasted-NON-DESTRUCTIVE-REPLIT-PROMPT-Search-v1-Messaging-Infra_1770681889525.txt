@@ -1,0 +1,253 @@
+NON-DESTRUCTIVE REPLIT PROMPT — Search v1 + Messaging Infrastructure Foundations (Postgres FTS + Trigram + Redis-ready)
+
+You are working in an existing monorepo:
+- Expo (React Native) app using expo-router (app/…)
+- Express backend (server/…)
+- PostgreSQL + Drizzle schema in shared/schema.ts
+- Session auth (express-session + connect-pg-simple)
+DO NOT remove or rewrite working features. Make additive, non-destructive changes only. Keep styling consistent (dark theme + gold accent + DM Sans). Prioritize correctness, performance, and a premium UX.
+
+GOAL
+Implement Search v1 (Instagram/X-style discovery) and add the foundational backend infrastructure needed now that we’re introducing:
+- Direct Messaging (real-time sockets)
+- User search + content search (keywords)
+- Future scaling (multi-instance + presence + rate limiting)
+
+Deliver:
+1) Postgres-native search for:
+   - Users (username/display name/bio) using pg_trgm + indexes
+   - Solos (title/tags + transcript full-text) using Postgres Full-Text Search (FTS) + GIN indexes
+2) New API endpoints under /api/search that return paginated results
+3) Frontend search UX:
+   - Search tab supports “Users” and “Solos” with filter toggle
+   - Typeahead suggestions + recent searches
+   - Result cards consistent with current design
+4) Redis-ready scaffolding:
+   - Add a Redis client wrapper (disabled in dev if not configured)
+   - Add a shared “RateLimitStore” interface with in-memory fallback (upgrade later)
+   - Presence storage interface (no UI yet required; just the foundation)
+5) Documentation updates in App Docs Library
+
+------------------------------------------------------------
+PHASE 1 — DATABASE: EXTENSIONS + INDEXES + SEARCH VECTORS
+------------------------------------------------------------
+
+1) Enable Postgres extensions (migration-safe)
+- Enable pg_trgm (for fuzzy user search)
+- Enable unaccent (optional but recommended for better matching)
+
+2) Users search fields
+Goal: fast prefix + fuzzy search for usernames.
+- Ensure users has:
+  - username (text) and optionally displayName (text) and bio (text)
+- Add a generated searchable “usernameNormalized” or use lower(username)
+- Add indexes:
+  - GIN index on username using gin_trgm_ops
+  - If displayName exists, add gin_trgm_ops index
+  - If searching bio, add gin_trgm_ops index (optional; consider performance)
+
+3) Solos full-text search (title/tags/transcript)
+We want full-text search across:
+- title
+- tags (string array or json; normalize to a text field for FTS)
+- transcript text (derive from transcript JSON)
+
+Add to solos table (additive):
+- searchText (text) nullable
+- searchVector (tsvector) nullable
+
+Rules:
+- searchText should be a concatenation of title + tags + transcriptPlainText
+- searchVector should be to_tsvector('english', unaccent(searchText))
+- Add a GIN index on searchVector
+
+Implementation options:
+A) Triggers (Postgres) to maintain searchVector automatically
+B) Maintain searchText/searchVector in application code whenever a solo is created/updated/transcribed
+Choose the simplest non-destructive approach:
+- If Drizzle migrations support SQL triggers comfortably, prefer trigger (less app code).
+- Otherwise, implement in server code with a single helper to update the search fields, called:
+  - after solo creation
+  - after transcription completes
+  - after title/tags updates
+
+Add indexes:
+- GIN (searchVector)
+- B-tree (createdAt desc) for paging search results
+
+------------------------------------------------------------
+PHASE 2 — BACKEND: SEARCH API (Express) + QUERY OPTIMIZATION
+------------------------------------------------------------
+
+Create server/routes/search.routes.ts mounted at:
+- /api/search
+
+Use existing validateBody/validateQuery and AppError pattern.
+Ensure all endpoints are authenticated or public depending on product intent:
+- User search likely should be authenticated to reduce scraping.
+- Solos search can be public or authenticated; follow existing app behavior.
+
+Endpoints:
+
+1) GET /api/search/users?q=&cursor=&limit=
+Behavior:
+- q required, min length 1–2
+- Return users matching username/displayName/bio using trigram similarity and prefix match.
+- Sort:
+  - exact username match first
+  - prefix matches next
+  - then similarity score desc
+- Cursor pagination:
+  - return { items, nextCursor }
+  - cursor can encode lastScore + lastId or lastUsername; keep deterministic ordering.
+Return shape:
+{ ok: true, data: { items: [{ id, username, avatarUrl, bio? }], nextCursor } }
+
+2) GET /api/search/solos?q=&cursor=&limit=
+Behavior:
+- Use FTS:
+  - plainto_tsquery or websearch_to_tsquery if available
+  - rank with ts_rank_cd
+- Search across searchVector
+- Return solos with:
+  - id, title, tags, duration, audioUrl, createdAt
+  - author summary (id, username, avatarUrl)
+  - optional snippet/highlight:
+    - return a short excerpt from searchText (do not return full transcript)
+- Sort by rank desc then createdAt desc for tie-breaker
+- Cursor pagination:
+  - encode lastRank + createdAt + id
+
+3) GET /api/search/suggestions?q=&limit=
+Behavior:
+- Return mixed suggestions:
+  - top users by prefix
+  - top tags by frequency (if tags exist)
+  - optionally recent trending search terms (future)
+This powers typeahead.
+
+4) OPTIONAL: GET /api/search/recent
+- Return the current user’s recent searches (stored in DB)
+- If not implemented, implement local-only recent searches in client.
+
+Performance requirements:
+- Add server-side limits (default 20, max 50)
+- Add rate limit for search endpoints (to prevent scraping and runaway usage)
+- Ensure queries use indexes (EXPLAIN is optional; confirm logically)
+
+------------------------------------------------------------
+PHASE 3 — BACKEND: REDIS-READY INFRA (FOUNDATIONS)
+------------------------------------------------------------
+
+1) Redis client wrapper (non-breaking)
+- Add server/lib/redis.ts:
+  - exports getRedisClient() that returns null if REDIS_URL not set
+  - handle connection errors gracefully and log once
+
+2) Rate limit storage interface
+- Add server/lib/rateLimitStore.ts:
+  - interface { incr(key, windowSeconds): Promise<{ count, resetAt }> }
+  - InMemoryRateLimitStore fallback (current behavior)
+  - RedisRateLimitStore if redis client exists (use INCR + EXPIRE)
+- Update search endpoints to use this store with sensible limits:
+  - e.g., 60 requests/min per user + IP fallback
+
+3) Presence storage interface (for messaging later)
+- Add server/lib/presenceStore.ts:
+  - interface: setOnline(userId), setOffline(userId), getStatus(userId), heartbeat(userId)
+  - InMemoryPresenceStore fallback
+  - RedisPresenceStore (SETEX keys like presence:{userId} = online with TTL)
+No UI required yet; just foundation + docs.
+
+------------------------------------------------------------
+PHASE 4 — FRONTEND: SEARCH UX (PREMIUM)
+------------------------------------------------------------
+
+1) Search screen update (existing Search tab)
+- If you already have app/(tabs)/search.tsx, enhance it.
+- Add segmented control: “Solos” | “Users”
+- Add a search input with:
+  - debounce (250–350ms)
+  - clear button
+  - loading indicator
+- Typeahead suggestions while typing:
+  - show suggested users + tags
+- Recent searches:
+  - local on-device recent list (AsyncStorage OK for this non-sensitive data)
+  - show “Clear recent” button
+
+2) Results rendering
+Users results:
+- user row: avatar, username, bio snippet, follow button (if follows exist)
+- tapping opens profile
+
+Solos results:
+- solo card: title, author, tags, duration
+- optionally show a snippet highlight (if backend returns)
+- tapping opens solo detail/playback
+
+3) Smoothness + perceived quality
+- Skeleton loaders
+- Empty states with friendly copy and icon
+- Maintain dark/gold theme + DM Sans
+- Avoid jank: use FlashList for long lists if needed.
+
+4) Caching strategy
+- Use React Query to cache:
+  - suggestions for a short TTL
+  - search results keyed by (type,q)
+- Cancel in-flight queries when q changes.
+
+------------------------------------------------------------
+PHASE 5 — KEEP SEARCH INDEXES UP TO DATE
+------------------------------------------------------------
+
+Implement a single helper on server:
+- server/services/searchIndex.ts with:
+  - buildSoloSearchText(solo): string
+  - updateSoloSearchFields(soloId): writes searchText + searchVector (or just searchText if trigger handles vector)
+Call it:
+- after solo creation (when title/tags exist)
+- after transcription completes (when transcript JSON exists)
+- whenever title/tags are updated
+
+Transcript extraction:
+- Convert transcript JSON (word-level) to plain text safely:
+  - join words with spaces
+  - keep length bounded (e.g., max 50k chars) to prevent huge vectors
+  - store only the plain text for search, not the raw JSON
+
+------------------------------------------------------------
+PHASE 6 — DOCS LIBRARY UPDATES
+------------------------------------------------------------
+
+Add/update docs pages:
+1) “Search v1”
+- endpoints
+- query behavior
+- ranking rules
+- pagination cursors
+- rate limits
+
+2) “Database: Search Indexing”
+- pg_trgm/unaccent
+- tsvector + GIN
+- how searchText/searchVector are maintained
+- how transcription influences search
+
+3) “Redis Foundations”
+- REDIS_URL
+- rateLimitStore interface
+- presenceStore interface
+- future socket scaling note (Socket.IO redis adapter)
+
+------------------------------------------------------------
+ACCEPTANCE CRITERIA
+- Searching users by partial username returns fast and relevant results.
+- Searching solos finds matches in title, tags, and transcript-derived text.
+- Search is paginated, rate-limited, and uses indexes.
+- Frontend search feels premium: segmented toggle, suggestions, skeletons, empty states.
+- Redis scaffolding exists but does not break local dev when REDIS_URL is absent.
+- Docs Library updated with the new capabilities.
+
+Proceed step-by-step, run typechecks, and keep changes non-destructive.

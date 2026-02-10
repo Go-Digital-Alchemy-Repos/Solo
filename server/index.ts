@@ -14,6 +14,7 @@ import { eq } from "drizzle-orm";
 import * as fs from "fs";
 import * as path from "path";
 import { logger, generateRequestId } from "./lib/logger";
+import { setupSocketServer } from "./realtime/socket";
 
 const app = express();
 const log = console.log;
@@ -248,6 +249,12 @@ function setupErrorHandler(app: express.Application) {
   app.use(errorHandler);
 }
 
+let sessionStoreInstance: any = null;
+
+function getSessionStore() {
+  return sessionStoreInstance;
+}
+
 function setupSession(app: express.Application) {
   const PgStore = connectPgSimple(session);
   const pool = new pg.Pool({
@@ -260,14 +267,18 @@ function setupSession(app: express.Application) {
     !!process.env.REPLIT_DEPLOYMENT ||
     !!process.env.REPLIT_DOMAINS;
 
+  const store = new PgStore({
+    pool,
+    createTableIfMissing: true,
+    tableName: "session",
+    pruneSessionInterval: 60 * 15,
+  });
+
+  sessionStoreInstance = store;
+
   app.use(
     session({
-      store: new PgStore({
-        pool,
-        createTableIfMissing: true,
-        tableName: "session",
-        pruneSessionInterval: 60 * 15,
-      }),
+      store,
       name: "connect.sid",
       secret: process.env.SESSION_SECRET || "solo-secret-fallback",
       resave: false,
@@ -330,6 +341,9 @@ async function ensureAdminAccount() {
   await ensureAdminAccount();
 
   const server = await registerRoutes(app);
+
+  setupSocketServer(server, getSessionStore());
+  log("Socket.IO server initialized");
 
   setupErrorHandler(app);
 
