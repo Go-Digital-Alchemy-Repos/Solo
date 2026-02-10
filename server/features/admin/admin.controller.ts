@@ -289,10 +289,10 @@ export async function saveIntegration(req: Request, res: Response) {
   if (!userId) return;
 
   const { service, config, enabled } = req.body || {};
-  const validServices: integrationsService.ServiceName[] = ["mailgun", "cloudflare_r2", "twilio"];
+  const validServices: integrationsService.ServiceName[] = ["mailgun", "cloudflare_r2", "twilio", "stripe"];
 
   if (!validServices.includes(service)) {
-    throw AppError.validationFailed({ service: ["Invalid service name. Must be one of: mailgun, cloudflare_r2, twilio"] });
+    throw AppError.validationFailed({ service: ["Invalid service name. Must be one of: mailgun, cloudflare_r2, twilio, stripe"] });
   }
 
   const result = await integrationsService.saveIntegration(service, config, enabled ?? false);
@@ -304,10 +304,10 @@ export async function testIntegration(req: Request, res: Response) {
   if (!userId) return;
 
   const { service } = req.params;
-  const validServices: integrationsService.ServiceName[] = ["mailgun", "cloudflare_r2", "twilio"];
+  const validServices: integrationsService.ServiceName[] = ["mailgun", "cloudflare_r2", "twilio", "stripe"];
 
   if (!validServices.includes(service as integrationsService.ServiceName)) {
-    throw AppError.validationFailed({ service: ["Invalid service name. Must be one of: mailgun, cloudflare_r2, twilio"] });
+    throw AppError.validationFailed({ service: ["Invalid service name. Must be one of: mailgun, cloudflare_r2, twilio, stripe"] });
   }
 
   const result = await integrationsService.testIntegration(service as integrationsService.ServiceName);

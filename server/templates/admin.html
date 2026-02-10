@@ -1330,11 +1330,22 @@
     <!-- Users Tab -->
     <div class="tab-content" id="tab-users">
       <div class="search-bar">
-        <input type="text" class="search-input" id="userSearch" placeholder="Search by email or username...">
-        <button class="btn btn-primary" id="userSearchBtn">Search</button>
+        <input type="text" class="search-input" id="umSearchInput" placeholder="Search by email or username..." onkeyup="if(event.key==='Enter'){umSearch=this.value;umPage=null;loadUserManagement();}">
+        <select class="form-input" id="umRoleFilter" onchange="umRole=this.value;umPage=null;loadUserManagement();" style="flex:0 0 140px;">
+          <option value="">All Roles</option>
+          <option value="admin">Admin</option>
+          <option value="user">User</option>
+        </select>
+        <select class="form-input" id="umStatusFilter" onchange="umStatus=this.value;umPage=null;loadUserManagement();" style="flex:0 0 150px;">
+          <option value="">All Statuses</option>
+          <option value="active">Active</option>
+          <option value="disabled">Disabled</option>
+        </select>
+        <button class="btn btn-primary" onclick="umSearch=document.getElementById('umSearchInput').value;umPage=null;loadUserManagement();">Search</button>
+        <button class="btn btn-primary" onclick="document.getElementById('createUserModal').classList.add('active');" style="background:var(--accent);color:#000;">Create User</button>
       </div>
-      <div id="usersLoading" class="loading"><div class="spinner"></div></div>
-      <div id="usersContent" style="display:none;">
+      <div id="umLoading" class="loading"><div class="spinner"></div></div>
+      <div id="umContent" style="display:none;">
         <div class="table-wrap">
           <table>
             <thead>
@@ -1342,15 +1353,16 @@
                 <th>Email</th>
                 <th>Username</th>
                 <th>Role</th>
+                <th>Status</th>
                 <th>Solos</th>
                 <th>Joined</th>
                 <th>Actions</th>
               </tr>
             </thead>
-            <tbody id="usersBody"></tbody>
+            <tbody id="umBody"></tbody>
           </table>
         </div>
-        <div class="pagination" id="usersPagination"></div>
+        <div class="pagination" id="umPagination"></div>
       </div>
     </div>
 
@@ -1548,35 +1560,38 @@
         <!-- Stripe -->
         <div class="intg-card" data-service="stripe">
           <div class="intg-header">
-            <div style="display:flex;align-items:center;gap:12px;">
-              <div class="intg-icon" style="background:linear-gradient(135deg,#635BFF,#A259FF);">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20M12 2v20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/></svg>
-              </div>
-              <div class="intg-name">Stripe</div>
+            <div class="intg-icon" style="background:linear-gradient(135deg,#635BFF,#A259FF);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20M12 2v20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/></svg>
             </div>
-            <div style="display:flex;align-items:center;gap:12px;">
+            <div class="intg-info">
+              <div class="intg-name">Stripe</div>
+              <div class="intg-desc">Payment processing and billing platform</div>
+            </div>
+            <div class="intg-status-wrap">
               <span class="intg-status" id="stripe-status">Not Configured</span>
-              <label class="toggle">
+              <label class="intg-toggle">
                 <input type="checkbox" id="stripe-enabled">
-                <span class="toggle-slider"></span>
+                <span class="intg-toggle-slider"></span>
               </label>
             </div>
           </div>
-          <div class="intg-body">
-            <div class="intg-fields">
-              <div class="intg-row">
+          <div class="intg-fields">
+            <div class="intg-row">
+              <div class="form-group" style="flex:1;">
                 <label>Secret Key</label>
                 <input type="password" class="form-input" id="stripe-secretKey" placeholder="sk_test_...">
               </div>
-              <div class="intg-row">
+              <div class="form-group" style="flex:1;">
                 <label>Publishable Key</label>
                 <input type="text" class="form-input" id="stripe-publishableKey" placeholder="pk_test_...">
               </div>
-              <div class="intg-row">
+            </div>
+            <div class="intg-row">
+              <div class="form-group" style="flex:1;">
                 <label>Webhook Secret</label>
                 <input type="password" class="form-input" id="stripe-webhookSecret" placeholder="whsec_...">
               </div>
-              <div class="intg-row">
+              <div class="form-group" style="width:160px;">
                 <label>Mode</label>
                 <select class="form-input" id="stripe-mode">
                   <option value="test">Test</option>
@@ -1696,29 +1711,123 @@
       </div>
     </div>
 
-  <!-- Edit User Modal -->
-  <div class="modal-overlay" id="editUserModal">
+  <!-- Create User Modal -->
+  <div class="modal-overlay" id="createUserModal">
     <div class="modal">
       <div class="modal-header">
-        <h3 class="modal-title">Edit User</h3>
-        <button class="modal-close" onclick="closeModal('editUserModal')">&times;</button>
-      </div>
-      <input type="hidden" id="editUserId">
-      <div class="form-group">
-        <label>Username</label>
-        <input type="text" class="form-input" id="editUserUsername">
+        <h3 class="modal-title">Create User</h3>
+        <button class="modal-close" onclick="closeModal('createUserModal')">&times;</button>
       </div>
       <div class="form-group">
-        <label>Bio</label>
-        <input type="text" class="form-input" id="editUserBio">
+        <label>Email (required)</label>
+        <input type="email" class="form-input" id="newUserEmail" placeholder="user@example.com">
+      </div>
+      <div class="form-group">
+        <label>Username (optional)</label>
+        <input type="text" class="form-input" id="newUserUsername" placeholder="username">
+      </div>
+      <div class="form-group">
+        <label>Temporary Password (optional - auto-generates if empty)</label>
+        <input type="password" class="form-input" id="newUserPassword" placeholder="Leave empty to auto-generate">
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select class="form-input" id="newUserRole">
+          <option value="user">User</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div id="createUserError" style="display:none;color:var(--danger);font-size:13px;margin-bottom:12px;"></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal('createUserModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="createNewUser()">Create User</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Detail Modal -->
+  <div class="modal-overlay" id="userDetailModal">
+    <div class="modal" style="max-width:640px;">
+      <div class="modal-header">
+        <h3 class="modal-title">User Details</h3>
+        <button class="modal-close" onclick="closeModal('userDetailModal')">&times;</button>
+      </div>
+      <input type="hidden" id="detailUserId">
+      <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;">
+        <div style="display:flex;gap:16px;align-items:center;">
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Email</div>
+            <div id="detailUserEmail" style="font-size:15px;color:var(--text);font-weight:500;"></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:24px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Username</div>
+            <div id="detailUserUsername" style="font-size:14px;color:var(--text-dim);"></div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Role</div>
+            <div id="detailUserRole"></div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Status</div>
+            <div id="detailUserStatus"></div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Joined</div>
+            <div id="detailUserJoined" style="font-size:14px;color:var(--text-dim);"></div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Solos</div>
+            <div id="detailUserSolos" style="font-size:14px;color:var(--text-dim);"></div>
+          </div>
+        </div>
+        <div id="detailUserDisabledReason" style="display:none;font-size:13px;color:var(--danger);background:var(--danger-dim);padding:8px 12px;border-radius:var(--radius-sm);"></div>
+      </div>
+      <div class="btn-group" style="margin-bottom:20px;flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" onclick="quickRoleChange(document.getElementById('detailUserId').value, document.getElementById('detailUserRole').querySelector('.badge-admin')!==null);closeModal('userDetailModal');">Change Role</button>
+        <button class="btn btn-outline btn-sm" onclick="showSetPasswordModal(document.getElementById('detailUserId').value)">Set Password</button>
+        <button class="btn btn-outline btn-sm" onclick="sendResetLink(document.getElementById('detailUserId').value)">Send Reset Link</button>
+        <button class="btn btn-danger btn-sm" onclick="toggleUserStatus(document.getElementById('detailUserId').value, document.getElementById('detailUserStatus').querySelector('.badge')?.textContent==='Disabled');closeModal('userDetailModal');">Disable/Enable</button>
+      </div>
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px;">Audit Log</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Action</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody id="detailAuditBody">
+            <tr><td colspan="3" class="empty-state">No audit history</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Set Password Modal -->
+  <div class="modal-overlay" id="setPasswordModal">
+    <div class="modal" style="max-width:440px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Set Password</h3>
+        <button class="modal-close" onclick="closeModal('setPasswordModal')">&times;</button>
+      </div>
+      <input type="hidden" id="setPasswordUserId">
+      <div class="form-group">
+        <label>New Password</label>
+        <input type="password" class="form-input" id="setPasswordInput" placeholder="Minimum 8 characters">
       </div>
       <div class="form-group" style="display:flex;align-items:center;gap:10px;">
-        <input type="checkbox" id="editUserAdmin" style="width:18px;height:18px;accent-color:var(--accent);">
-        <label for="editUserAdmin" style="margin:0;text-transform:none;font-size:14px;color:var(--text);">Admin privileges</label>
+        <input type="checkbox" id="setPasswordForceLogout" checked style="width:18px;height:18px;accent-color:var(--accent);">
+        <label for="setPasswordForceLogout" style="margin:0;text-transform:none;font-size:14px;color:var(--text);">Force logout all sessions</label>
       </div>
+      <div id="setPasswordError" style="display:none;color:var(--danger);font-size:13px;margin-bottom:12px;"></div>
       <div class="modal-actions">
-        <button class="btn btn-outline" onclick="closeModal('editUserModal')">Cancel</button>
-        <button class="btn btn-primary" id="saveUserBtn">Save Changes</button>
+        <button class="btn btn-outline" onclick="closeModal('setPasswordModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitSetPassword()">Set Password</button>
       </div>
     </div>
   </div>
@@ -1731,8 +1840,10 @@
   <script>
     const API = '';
     let currentUser = null;
-    let usersPage = 1;
-    let usersSearch = '';
+    let umPage = null;
+    let umSearch = '';
+    let umRole = '';
+    let umStatus = '';
 
     async function api(path, options = {}) {
       const res = await fetch(API + path, {
@@ -1836,7 +1947,7 @@
         document.getElementById('tab-' + tab).classList.add('active');
 
         if (tab === 'reports') loadReports();
-        if (tab === 'users') loadUsers();
+        if (tab === 'users') loadUserManagement();
         if (tab === 'docs') loadDocsTab();
         if (tab === 'integrations') loadIntegrations();
         if (tab === 'system-status') loadSystemStatus();
@@ -1907,106 +2018,263 @@
       }
     }
 
-    // Users
-    async function loadUsers() {
-      document.getElementById('usersLoading').style.display = 'block';
-      document.getElementById('usersContent').style.display = 'none';
+    // User Management - Advanced
+    async function loadUserManagement() {
+      document.getElementById('umLoading').style.display = 'block';
+      document.getElementById('umContent').style.display = 'none';
+
+      const params = new URLSearchParams({ limit: '25' });
+      if (umSearch) params.set('query', umSearch);
+      if (umRole) params.set('role', umRole);
+      if (umStatus) params.set('status', umStatus);
+      if (umPage) params.set('cursor', umPage);
 
       try {
-        const res = await api(`/api/admin/users?page=${usersPage}&search=${encodeURIComponent(usersSearch)}`);
+        const res = await api('/api/admin/user-management?' + params.toString());
         const data = await res.json();
+        if (!data.ok) throw new Error('Failed');
+        const { users, nextCursor, hasMore } = data.data;
 
-        document.getElementById('usersBody').innerHTML = data.users.map(u => `
-          <tr>
-            <td class="user-email">${u.email}</td>
-            <td>${u.username || '<span style="color:var(--text-muted);">(not set)</span>'}</td>
-            <td><span class="badge ${u.isAdmin ? 'badge-admin' : 'badge-user'}">${u.isAdmin ? 'Admin' : 'User'}</span></td>
-            <td>${u.soloCount}</td>
+        document.getElementById('umBody').innerHTML = users.map(u => {
+          const roleBadge = u.isAdmin
+            ? '<span class="badge badge-admin">Admin</span>'
+            : '<span class="badge badge-user">User</span>';
+          const statusBadge = u.isDisabled
+            ? '<span class="badge" style="background:var(--danger-dim);color:var(--danger);border:1px solid rgba(255,68,68,0.3);">Disabled</span>'
+            : '<span class="badge" style="background:rgba(52,199,89,0.15);color:var(--success);border:1px solid rgba(52,199,89,0.3);">Active</span>';
+          return `<tr>
+            <td class="user-email">${escapeHtml(u.email)}</td>
+            <td>${escapeHtml(u.username) || '<span style="color:var(--text-muted);">(not set)</span>'}</td>
+            <td>${roleBadge}</td>
+            <td>${statusBadge}</td>
+            <td>${u.soloCount || 0}</td>
             <td>${formatDate(u.createdAt)}</td>
             <td>
               <div class="btn-group">
-                <button class="btn btn-outline btn-sm" onclick="editUser('${u.id}', '${(u.username || '').replace(/'/g, "\\'")}', '${(u.bio || '').replace(/'/g, "\\'")}', ${u.isAdmin})">Edit</button>
-                <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}', '${u.email.replace(/'/g, "\\'")}')">Delete</button>
+                <button class="btn btn-outline btn-sm" onclick="viewUserDetail('${u.id}')">View</button>
+                <button class="btn btn-outline btn-sm" onclick="quickRoleChange('${u.id}', ${u.isAdmin})">${u.isAdmin ? 'Demote' : 'Promote'}</button>
+                <button class="btn ${u.isDisabled ? 'btn-primary' : 'btn-danger'} btn-sm" onclick="toggleUserStatus('${u.id}', ${u.isDisabled})">${u.isDisabled ? 'Enable' : 'Disable'}</button>
               </div>
             </td>
-          </tr>
-        `).join('');
+          </tr>`;
+        }).join('') || '<tr><td colspan="7" class="empty-state">No users found</td></tr>';
 
         let pagHtml = '';
-        if (data.pages > 1) {
-          pagHtml += `<button class="btn btn-outline btn-sm" ${usersPage <= 1 ? 'disabled' : ''} onclick="usersPage--;loadUsers();">&laquo; Prev</button>`;
-          pagHtml += `<span class="page-info">Page ${data.page} of ${data.pages}</span>`;
-          pagHtml += `<button class="btn btn-outline btn-sm" ${usersPage >= data.pages ? 'disabled' : ''} onclick="usersPage++;loadUsers();">Next &raquo;</button>`;
+        if (umPage || hasMore) {
+          pagHtml += `<button class="btn btn-outline btn-sm" ${!umPage ? 'disabled' : ''} onclick="umPage=null;loadUserManagement();">First</button>`;
+          pagHtml += `<button class="btn btn-outline btn-sm" ${!hasMore ? 'disabled' : ''} onclick="umPage='${nextCursor}';loadUserManagement();">Next</button>`;
         }
-        document.getElementById('usersPagination').innerHTML = pagHtml;
+        document.getElementById('umPagination').innerHTML = pagHtml;
 
-        document.getElementById('usersLoading').style.display = 'none';
-        document.getElementById('usersContent').style.display = 'block';
+        document.getElementById('umLoading').style.display = 'none';
+        document.getElementById('umContent').style.display = 'block';
       } catch (err) {
-        document.getElementById('usersLoading').innerHTML = '<p style="color:var(--danger);">Failed to load users</p>';
+        document.getElementById('umLoading').innerHTML = '<p style="color:var(--danger);">Failed to load users</p>';
       }
     }
 
-    document.getElementById('userSearchBtn').addEventListener('click', () => {
-      usersSearch = document.getElementById('userSearch').value;
-      usersPage = 1;
-      loadUsers();
-    });
+    async function viewUserDetail(userId) {
+      try {
+        const res = await api('/api/admin/user-management/' + userId);
+        const data = await res.json();
+        if (!data.ok) throw new Error('Failed');
+        const u = data.data;
 
-    document.getElementById('userSearch').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        usersSearch = document.getElementById('userSearch').value;
-        usersPage = 1;
-        loadUsers();
+        document.getElementById('detailUserId').value = u.id;
+        document.getElementById('detailUserEmail').textContent = u.email;
+        document.getElementById('detailUserUsername').textContent = u.username || '(not set)';
+        document.getElementById('detailUserRole').innerHTML = u.isAdmin
+          ? '<span class="badge badge-admin">Admin</span>'
+          : '<span class="badge badge-user">User</span>';
+        document.getElementById('detailUserStatus').innerHTML = u.isDisabled
+          ? '<span class="badge" style="background:var(--danger-dim);color:var(--danger);">Disabled</span>'
+          : '<span class="badge" style="background:rgba(52,199,89,0.15);color:var(--success);">Active</span>';
+        if (u.isDisabled && u.disabledReason) {
+          document.getElementById('detailUserDisabledReason').textContent = 'Reason: ' + u.disabledReason;
+          document.getElementById('detailUserDisabledReason').style.display = 'block';
+        } else {
+          document.getElementById('detailUserDisabledReason').style.display = 'none';
+        }
+        document.getElementById('detailUserJoined').textContent = formatDate(u.createdAt);
+        document.getElementById('detailUserSolos').textContent = u.soloCount || 0;
+
+        const auditBody = document.getElementById('detailAuditBody');
+        if (u.recentAudit && u.recentAudit.length > 0) {
+          auditBody.innerHTML = u.recentAudit.map(a => {
+            const details = a.details ? JSON.stringify(a.details) : '';
+            return `<tr>
+              <td style="white-space:nowrap;font-size:12px;">${formatDate(a.createdAt)}</td>
+              <td><span class="badge badge-user">${a.action}</span></td>
+              <td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(details)}">${escapeHtml(details)}</td>
+            </tr>`;
+          }).join('');
+        } else {
+          auditBody.innerHTML = '<tr><td colspan="3" class="empty-state">No audit history</td></tr>';
+        }
+
+        document.getElementById('userDetailModal').classList.add('active');
+      } catch (err) {
+        alert('Failed to load user details');
       }
-    });
-
-    function editUser(id, username, bio, isAdmin) {
-      document.getElementById('editUserId').value = id;
-      document.getElementById('editUserUsername').value = username;
-      document.getElementById('editUserBio').value = bio;
-      document.getElementById('editUserAdmin').checked = isAdmin;
-      document.getElementById('editUserModal').classList.add('active');
     }
 
-    document.getElementById('saveUserBtn').addEventListener('click', async () => {
-      const id = document.getElementById('editUserId').value;
-      const username = document.getElementById('editUserUsername').value;
-      const bio = document.getElementById('editUserBio').value;
-      const isAdmin = document.getElementById('editUserAdmin').checked;
+    async function quickRoleChange(userId, currentlyAdmin) {
+      const newRole = currentlyAdmin ? 'user' : 'admin';
+      if (!confirm(`Change this user's role to ${newRole}?`)) return;
 
       try {
-        const res = await api(`/api/admin/users/${id}`, {
-          method: 'PUT',
-          body: JSON.stringify({ username, bio, isAdmin }),
+        const res = await api('/api/admin/user-management/' + userId + '/role', {
+          method: 'PATCH',
+          body: JSON.stringify({ role: newRole }),
         });
-
-        if (res.ok) {
-          closeModal('editUserModal');
-          loadUsers();
-        } else {
-          const data = await res.json();
-          alert(data.error || 'Failed to update user');
+        const data = await res.json();
+        if (!res.ok) {
+          alert((data.error && data.error.message) || 'Failed to change role');
+          return;
         }
+        loadUserManagement();
       } catch (err) {
-        alert('Failed to update user');
+        alert('Failed to change role');
       }
-    });
+    }
 
-    async function deleteUser(id, email) {
-      if (!confirm(`Delete user ${email}? This will also remove all their solos. This cannot be undone.`)) return;
+    async function toggleUserStatus(userId, currentlyDisabled) {
+      let reason = '';
+      if (!currentlyDisabled) {
+        reason = prompt('Reason for disabling (optional):');
+        if (reason === null) return;
+      }
 
       try {
-        const res = await api(`/api/admin/users/${id}`, { method: 'DELETE' });
-        if (res.ok) {
-          loadUsers();
-        } else {
-          const data = await res.json();
-          alert(data.error || 'Failed to delete user');
+        const res = await api('/api/admin/user-management/' + userId + '/status', {
+          method: 'PATCH',
+          body: JSON.stringify({ isDisabled: !currentlyDisabled, reason: reason || undefined }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert((data.error && data.error.message) || 'Failed to update status');
+          return;
+        }
+        loadUserManagement();
+      } catch (err) {
+        alert('Failed to update user status');
+      }
+    }
+
+    async function createNewUser() {
+      const email = document.getElementById('newUserEmail').value.trim();
+      const username = document.getElementById('newUserUsername').value.trim();
+      const tempPassword = document.getElementById('newUserPassword').value;
+      const role = document.getElementById('newUserRole').value;
+      const errEl = document.getElementById('createUserError');
+
+      if (!email || !email.includes('@')) {
+        errEl.textContent = 'Valid email required';
+        errEl.style.display = 'block';
+        return;
+      }
+      errEl.style.display = 'none';
+
+      try {
+        const res = await api('/api/admin/user-management', {
+          method: 'POST',
+          body: JSON.stringify({ email, username: username || undefined, tempPassword: tempPassword || undefined, role }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          errEl.textContent = (data.error && data.error.message) || 'Failed to create user';
+          errEl.style.display = 'block';
+          return;
+        }
+
+        closeModal('createUserModal');
+        document.getElementById('newUserEmail').value = '';
+        document.getElementById('newUserUsername').value = '';
+        document.getElementById('newUserPassword').value = '';
+        document.getElementById('newUserRole').value = 'user';
+        loadUserManagement();
+
+        if (data.data.resetLink) {
+          alert('User created! Reset link: ' + data.data.resetLink);
         }
       } catch (err) {
-        alert('Failed to delete user');
+        errEl.textContent = 'Failed to create user';
+        errEl.style.display = 'block';
       }
+    }
+
+    async function sendResetLink(userId) {
+      try {
+        const res = await api('/api/admin/user-management/' + userId + '/send-reset', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          alert((data.error && data.error.message) || 'Failed to generate reset link');
+          return;
+        }
+        alert('Reset link generated: ' + data.data.resetLink + '\nExpires: ' + new Date(data.data.expiresAt).toLocaleString());
+      } catch (err) {
+        alert('Failed to generate reset link');
+      }
+    }
+
+    function showSetPasswordModal(userId) {
+      document.getElementById('setPasswordUserId').value = userId;
+      document.getElementById('setPasswordInput').value = '';
+      document.getElementById('setPasswordForceLogout').checked = true;
+      document.getElementById('setPasswordError').style.display = 'none';
+      document.getElementById('setPasswordModal').classList.add('active');
+    }
+
+    async function submitSetPassword() {
+      const userId = document.getElementById('setPasswordUserId').value;
+      const newPassword = document.getElementById('setPasswordInput').value;
+      const forceLogout = document.getElementById('setPasswordForceLogout').checked;
+      const errEl = document.getElementById('setPasswordError');
+
+      if (!newPassword || newPassword.length < 8) {
+        errEl.textContent = 'Password must be at least 8 characters';
+        errEl.style.display = 'block';
+        return;
+      }
+      errEl.style.display = 'none';
+
+      try {
+        const res = await api('/api/admin/user-management/' + userId + '/set-password', {
+          method: 'POST',
+          body: JSON.stringify({ newPassword, forceLogout }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          errEl.textContent = (data.error && data.error.message) || 'Failed to set password';
+          errEl.style.display = 'block';
+          return;
+        }
+        closeModal('setPasswordModal');
+        alert('Password updated successfully');
+      } catch (err) {
+        errEl.textContent = 'Failed to set password';
+        errEl.style.display = 'block';
+      }
+    }
+
+    async function loadUserAudit(userId) {
+      try {
+        const res = await api('/api/admin/user-management/' + userId + '/audit');
+        const data = await res.json();
+        if (!data.ok) return;
+
+        const auditBody = document.getElementById('detailAuditBody');
+        if (data.data.entries && data.data.entries.length > 0) {
+          auditBody.innerHTML = data.data.entries.map(a => {
+            const details = a.details ? JSON.stringify(a.details) : '';
+            return `<tr>
+              <td style="white-space:nowrap;font-size:12px;">${formatDate(a.createdAt)}</td>
+              <td><span class="badge badge-user">${a.action}</span></td>
+              <td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(details)}">${escapeHtml(details)}</td>
+            </tr>`;
+          }).join('');
+        }
+      } catch (err) {}
     }
 
     // ===== DOCS TAB =====
