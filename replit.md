@@ -10,9 +10,10 @@ Preferred communication style: Simple, everyday language.
 
 ### Frontend (Expo / React Native)
 - **Framework**: Expo SDK 54 with React Native 0.81, utilizing the new architecture.
-- **Routing**: File-based routing with `expo-router` and typed routes, organized into a tab-based navigation (Feed, Search, Record, Profile).
+- **Routing**: File-based routing with `expo-router` and typed routes, organized into a tab-based navigation (Feed, Search, Record, Messages, Profile).
 - **Authentication**: Managed by `AuthProvider` with `AuthGate` enforcing a mandatory profile setup flow post-signup.
-- **State Management**: React Context API for core states (auth, app data, audio playback) and TanStack React Query for server data fetching.
+- **State Management**: React Context API for core states (auth, app data, audio playback, direct messaging) and TanStack React Query for server data fetching.
+- **Direct Messaging**: Full DM system with `DmProvider` context managing conversations, real-time polling, typing indicators, presence tracking, and unread counts. UI includes Inbox (conversation list), New Message (user search), and Chat Thread screens.
 - **Data Persistence**: Session cookies secured with `expo-secure-store` (with `AsyncStorage` fallback for web). Local storage for likes and follows.
 - **Audio**: `expo-av` for recording and playback, managed by a `PlaybackProvider` for a single shared audio instance.
 - **Creator Suite**: Features multi-segment recording, an optional Teleprompter, a "Background Vibes" selector, and a WaveformTrimmer with transcript preview. Post-processing is asynchronous, with client-side polling for status updates and error handling.
@@ -21,9 +22,10 @@ Preferred communication style: Simple, everyday language.
 - **Platform Support**: Supports iOS, Android, and Web, with platform-specific adjustments for safe areas, haptics, and keyboard behavior.
 
 ### Backend (Express.js)
-- **Server**: Express 5 on Node.js, structured with feature-based modules (auth, solos, vibes, admin).
+- **Server**: Express 5 on Node.js, structured with feature-based modules (auth, solos, vibes, admin, dm).
 - **Shared Utilities**: Includes centralized error handling, authentication helpers, and file path constants.
-- **API Endpoints**: Comprehensive set of RESTful APIs for authentication, solo (audio post) management (CRUD, upload, processing status, retry), background vibes listing, and admin functionalities.
+- **API Endpoints**: Comprehensive set of RESTful APIs for authentication, solo (audio post) management (CRUD, upload, processing status, retry), background vibes listing, admin functionalities, and direct messaging (conversations, messages, typing, presence, read receipts).
+- **Direct Messaging**: Feature module at `server/features/dm/` with routes (`dm.routes.ts`), service layer (`dm.service.ts`), and schema (`dm.schema.ts`). Supports 1:1 conversations, message CRUD, typing indicators, online presence, read receipts, and unread counts via polling.
 - **Authentication**: Integrates with BetterAuth for enhanced authentication alongside legacy session management (`express-session` with PostgreSQL-backed sessions).
 - **File Uploads**: `multer` handles uploads for avatars and audio files.
 - **CORS**: Dynamically configured to support development and deployment environments.
@@ -42,6 +44,11 @@ Preferred communication style: Simple, everyday language.
     - `system_integrations`: Stores configurations for external services.
     - `system_events`: Structured event log with level, source, redacted details, and resolution tracking.
     - `request_logs`: HTTP request audit trail for errors and verbose-mode logging.
+    - `dm_conversations`: Direct message conversations with type (direct/group), timestamps.
+    - `dm_participants`: Links users to conversations with roles, mute settings, read cursors.
+    - `dm_messages`: Individual messages with text content, sender, type, client nonce for dedup.
+    - `dm_typing`: Typing indicator state per user per conversation.
+    - `dm_presence`: Online/offline presence tracking per user.
 - **Validation**: Zod schemas generated from Drizzle definitions.
 - **Migrations**: Managed via `drizzle-kit`.
 - **Connection**: Configured via `DATABASE_URL` environment variable.
