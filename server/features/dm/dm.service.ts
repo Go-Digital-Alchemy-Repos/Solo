@@ -58,32 +58,36 @@ export async function getUserConversations(userId: string) {
     ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
   `);
 
-  const conversationIds = convos.rows.map((r: any) => r.id);
+  const conversationIds = convos.rows.map((r: any) => r.id) as string[];
   if (conversationIds.length === 0) return [];
 
-  const participants = await db.execute(sql`
-    SELECT
-      dp.conversation_id,
-      dp.user_id,
-      u.username,
-      u.avatar_url,
-      u.bio
-    FROM dm_participants dp
-    JOIN users u ON u.id = dp.user_id
-    WHERE dp.conversation_id = ANY(${conversationIds})
-      AND dp.left_at IS NULL
-  `);
+  const participants = await db
+    .select({
+      conversationId: dmParticipants.conversationId,
+      userId: dmParticipants.userId,
+      username: users.username,
+      avatarUrl: users.avatarUrl,
+      bio: users.bio,
+    })
+    .from(dmParticipants)
+    .innerJoin(users, eq(users.id, dmParticipants.userId))
+    .where(
+      and(
+        inArray(dmParticipants.conversationId, conversationIds),
+        isNull(dmParticipants.leftAt)
+      )
+    );
 
   const participantMap = new Map<string, any[]>();
-  for (const p of participants.rows) {
-    const list = participantMap.get(p.conversation_id as string) || [];
+  for (const p of participants) {
+    const list = participantMap.get(p.conversationId) || [];
     list.push({
-      userId: p.user_id,
+      userId: p.userId,
       username: p.username,
-      avatarUrl: p.avatar_url,
+      avatarUrl: p.avatarUrl,
       bio: p.bio,
     });
-    participantMap.set(p.conversation_id as string, list);
+    participantMap.set(p.conversationId, list);
   }
 
   return convos.rows.map((c: any) => {
