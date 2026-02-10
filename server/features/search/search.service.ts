@@ -134,29 +134,24 @@ export async function searchUsers(query: string, limit = 20, offset = 0) {
   const sanitized = query.replace(/[^\w\s@]/g, '').trim();
   if (!sanitized) return { results: [], total: 0 };
 
+  const whereClause = or(
+    sql`similarity(coalesce(username, ''), ${sanitized}) > 0.1`,
+    sql`similarity(coalesce(bio, ''), ${sanitized}) > 0.1`,
+    ilike(users.username, `%${sanitized}%`),
+  );
+
   const results = await db.select({
     id: users.id,
     username: users.username,
-    displayName: users.displayName,
     avatarUrl: users.avatarUrl,
     bio: users.bio,
-    followerCount: users.followerCount,
     similarity: sql<number>`greatest(
-      similarity(username, ${sanitized}),
-      similarity(coalesce(display_name, ''), ${sanitized}),
+      similarity(coalesce(username, ''), ${sanitized}),
       similarity(coalesce(bio, ''), ${sanitized})
     )`.as('sim'),
   })
     .from(users)
-    .where(
-      or(
-        sql`similarity(username, ${sanitized}) > 0.1`,
-        sql`similarity(coalesce(display_name, ''), ${sanitized}) > 0.1`,
-        sql`similarity(coalesce(bio, ''), ${sanitized}) > 0.1`,
-        ilike(users.username, `%${sanitized}%`),
-        ilike(users.displayName, `%${sanitized}%`),
-      )
-    )
+    .where(whereClause)
     .orderBy(sql`sim DESC`)
     .limit(limit)
     .offset(offset);
@@ -165,15 +160,7 @@ export async function searchUsers(query: string, limit = 20, offset = 0) {
     count: sql<number>`count(*)::int`,
   })
     .from(users)
-    .where(
-      or(
-        sql`similarity(username, ${sanitized}) > 0.1`,
-        sql`similarity(coalesce(display_name, ''), ${sanitized}) > 0.1`,
-        sql`similarity(coalesce(bio, ''), ${sanitized}) > 0.1`,
-        ilike(users.username, `%${sanitized}%`),
-        ilike(users.displayName, `%${sanitized}%`),
-      )
-    );
+    .where(whereClause);
 
   return { results, total: countResult?.count ?? 0 };
 }
@@ -207,13 +194,11 @@ export async function getTrendingUsers(limit = 10) {
   return db.select({
     id: users.id,
     username: users.username,
-    displayName: users.displayName,
     avatarUrl: users.avatarUrl,
     bio: users.bio,
-    followerCount: users.followerCount,
   })
     .from(users)
     .where(sql`username IS NOT NULL AND username != ''`)
-    .orderBy(desc(users.followerCount))
+    .orderBy(desc(users.createdAt))
     .limit(limit);
 }

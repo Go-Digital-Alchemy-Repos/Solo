@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { asyncHandler } from "../../utils/errors";
+import { asyncHandler } from "../../middleware/errorHandler";
 import * as searchService from "./search.service";
 
 const router = Router();
