@@ -1,5 +1,11 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, jsonb, serial, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, jsonb, serial, boolean, index, customType } from "drizzle-orm/pg-core";
+
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return 'tsvector';
+  },
+});
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -107,8 +113,11 @@ export const solos = pgTable("solos", {
   lastAttemptAt: timestamp("last_attempt_at"),
   readyAt: timestamp("ready_at"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  searchText: text("search_text"),
+  searchVector: tsvector("search_vector"),
 }, (table) => [
   index("solos_status_updated_idx").on(table.status, table.updatedAt),
+  index("solos_created_at_idx").on(table.timestamp),
 ]);
 
 export const systemIntegrations = pgTable("system_integrations", {
