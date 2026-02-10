@@ -104,9 +104,12 @@ export default function AuthScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                returnKeyType={mode === 'login' ? 'go' : 'next'}
+                onSubmitEditing={mode === 'login' ? handleSubmit : undefined}
+                blurOnSubmit={mode === 'login'}
                 testID="password-input"
               />
-              <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+              <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn} hitSlop={8}>
                 <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={Colors.textMuted} />
               </Pressable>
             </View>
@@ -124,6 +127,9 @@ export default function AuthScreen() {
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   secureTextEntry={!showPassword}
+                  returnKeyType="go"
+                  onSubmitEditing={handleSubmit}
+                  blurOnSubmit={true}
                   testID="confirm-password-input"
                 />
               </View>
@@ -139,8 +145,14 @@ export default function AuthScreen() {
 
           <Pressable
             onPress={handleSubmit}
-            style={[styles.submitBtn, loading && { opacity: 0.7 }]}
+            style={({ pressed }) => [
+              styles.submitBtn,
+              loading && { opacity: 0.7 },
+              pressed && !loading && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+            ]}
             disabled={loading}
+            android_ripple={{ color: 'rgba(0,0,0,0.2)' }}
+            hitSlop={8}
             testID="submit-btn"
           >
             {loading ? (
