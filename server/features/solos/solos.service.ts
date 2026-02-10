@@ -11,6 +11,7 @@ import { writeFile, unlink, readFile } from "fs/promises";
 import { openai, ensureCompatibleFormat } from "../../replit_integrations/audio/client";
 import { toFile } from "openai";
 import { UPLOADS_DIR, VIBES_DIR } from "../../utils/paths";
+import { updateSoloSearchFields } from "../search/search.service";
 
 const AVAILABLE_VIBES = [
   { id: "coffee-shop", label: "Coffee Shop", file: "coffee-shop.mp3" },
@@ -69,6 +70,11 @@ export async function updateSolo(soloId: string, updates: Record<string, any>) {
     .set(updates)
     .where(eq(solos.id, soloId))
     .returning();
+
+  if (updates.title || updates.tags) {
+    updateSoloSearchFields(soloId).catch(() => {});
+  }
+
   return updated;
 }
 
@@ -132,6 +138,8 @@ export async function generateTranscript(soloId: string, audioFilePath: string, 
     await db.update(solos)
       .set({ transcript })
       .where(eq(solos.id, soloId));
+
+    updateSoloSearchFields(soloId).catch(() => {});
 
     return transcript;
   } catch (error) {

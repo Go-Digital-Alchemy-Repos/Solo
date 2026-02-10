@@ -8,6 +8,7 @@ import solosRoutes from "./features/solos/solos.routes";
 import vibesRoutes from "./features/vibes/vibes.routes";
 import adminRoutes from "./features/admin/admin.routes";
 import dmRoutes from "./features/dm/dm.routes";
+import searchRoutes from "./features/search/search.routes";
 import { streamAudio, audioOptions } from "./features/solos/solos.controller";
 import { serveAvatar } from "./features/auth/auth.controller";
 import { logger } from "./lib/logger";
@@ -30,6 +31,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/vibes", vibesRoutes);
   app.use("/api/admin", adminRoutes);
   app.use("/api/dm", dmRoutes);
+  app.use("/api/search", searchRoutes);
 
   app.get("/api/audio/:fileId", streamAudio);
   app.head("/api/audio/:fileId", streamAudio);

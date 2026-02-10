@@ -3,6 +3,7 @@ import { solos } from "@shared/schema";
 import type { SoloStatus, SoloProcessingStep } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import * as solosService from "../features/solos/solos.service";
+import { updateSoloSearchFields } from "../features/search/search.service";
 import { logger } from "../lib/logger";
 
 export interface ProcessingJob {
@@ -85,6 +86,13 @@ export async function processSolo(job: ProcessingJob): Promise<void> {
         step: 'transcribe',
         error: err?.message?.slice(0, 300),
       });
+    }
+
+    try {
+      await updateSoloSearchFields(soloId);
+      logger.processing(soloId, 'index', 'search index updated');
+    } catch (err: any) {
+      logger.warn('Search indexing failed, continuing', { soloId, error: err?.message?.slice(0, 300) });
     }
 
     await updateSoloStatus(soloId, 'ready', 'done');
